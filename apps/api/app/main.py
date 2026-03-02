@@ -6,6 +6,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import engine
 from app.models import entities  # noqa: F401
+from app.services.storage import ensure_bucket
 
 settings = get_settings()
 
@@ -24,6 +25,7 @@ app.add_middleware(
 async def on_startup() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await ensure_bucket()
 
 
 app.include_router(router, prefix='/api')

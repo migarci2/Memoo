@@ -114,7 +114,11 @@
 }
 
 .landing-root main section {
-  padding: 2.4rem 0;
+  padding: 3.5rem 0;
+}
+
+.landing-root {
+  padding-bottom: 3rem;
 }
 
 .kicker {
@@ -261,12 +265,13 @@
   font-size: 0.88rem;
 }
 
-.hero-space {
+.landing-root .hero-space {
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
   gap: 1rem;
-  padding-top: 0.35rem;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .hero-space-line {
@@ -330,6 +335,10 @@
   font-size: 0.84rem;
   color: #556068;
   font-weight: 700;
+}
+
+.story {
+  scroll-margin-top: 5rem;
 }
 
 .story-shell {
@@ -442,8 +451,10 @@
   padding: 0.35rem 0.5rem;
 }
 
-.proof {
-  padding-top: 1.2rem;
+.landing-root .proof {
+  padding-top: 3.5rem;
+  padding-bottom: 3.5rem;
+  scroll-margin-top: 5rem;
 }
 
 .proof-grid {
@@ -495,7 +506,7 @@
 }
 
 .footer {
-  margin-top: 1.3rem;
+  margin-top: 3rem;
   padding: 1rem;
 }
 
@@ -664,3 +675,4 @@
     align-items: flex-start;
   }
 }
+/* test-reload-marker */

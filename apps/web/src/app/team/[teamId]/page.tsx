@@ -99,9 +99,17 @@ export default async function TeamDashboardPage({ params }: PageProps) {
               <p className="landing-kicker">Execution trend</p>
               <h2 className="mt-1 text-2xl font-bold tracking-tight">Runs over the last 8 checkpoints</h2>
             </div>
-            <p className="rounded-full border border-[var(--app-line)] bg-[var(--app-surface-2)] px-3 py-1 text-xs font-semibold text-[var(--app-muted)]">
-              Estimated monthly runs: {monthlyRunsEstimate}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="rounded-full border border-[var(--app-line)] bg-[var(--app-surface-2)] px-3 py-1 text-xs font-semibold text-[var(--app-muted)]">
+                ~{monthlyRunsEstimate} est. monthly
+              </p>
+              <Link
+                href={`/team/${teamId}/runs`}
+                className="rounded-full border border-[var(--app-line)] bg-[var(--app-chip)] px-3 py-1 text-xs font-semibold text-[var(--app-blue)]"
+              >
+                View all runs
+              </Link>
+            </div>
           </div>
 
           <div className="chart-grid rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface)]/92 p-5">
@@ -225,6 +233,13 @@ export default async function TeamDashboardPage({ params }: PageProps) {
                 <span className="font-semibold">Create playbook</span>
                 <span className="text-sm text-[var(--app-muted)]">New automation</span>
               </Link>
+              <Link
+                href={`/team/${teamId}/runs/new`}
+                className="panel-tight flex items-center justify-between px-4 py-3"
+              >
+                <span className="font-semibold">New run</span>
+                <span className="text-sm text-[var(--app-muted)]">Execute playbook</span>
+              </Link>
             </div>
 
             <div className="mt-4 space-y-2">
@@ -251,9 +266,17 @@ export default async function TeamDashboardPage({ params }: PageProps) {
               <p className="landing-kicker">Playbook portfolio</p>
               <h2 className="mt-1 text-2xl font-bold tracking-tight">Automations by workflow</h2>
             </div>
-            <p className="rounded-full border border-[var(--app-line)] bg-[var(--app-surface-2)] px-3 py-1 text-xs font-semibold text-[var(--app-muted)]">
-              ~{estimatedRunsPerPlaybook} runs/playbook/week
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="rounded-full border border-[var(--app-line)] bg-[var(--app-surface-2)] px-3 py-1 text-xs font-semibold text-[var(--app-muted)]">
+                ~{estimatedRunsPerPlaybook} runs/playbook/week
+              </p>
+              <Link
+                href={`/team/${teamId}/playbooks`}
+                className="rounded-full border border-[var(--app-line)] bg-[var(--app-chip)] px-3 py-1 text-xs font-semibold text-[var(--app-blue)]"
+              >
+                View all
+              </Link>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -275,10 +298,12 @@ export default async function TeamDashboardPage({ params }: PageProps) {
                   </tr>
                 ) : (
                   playbooks.slice(0, 8).map(playbook => (
-                    <tr key={playbook.id} className="border-t border-[var(--app-line)]">
+                    <tr key={playbook.id} className="group border-t border-[var(--app-line)] transition-colors hover:bg-[var(--app-chip)]/60">
                       <td className="py-3">
-                        <p className="font-semibold">{playbook.name}</p>
-                        <p className="text-xs text-[var(--app-muted)]">{playbook.description ?? 'No description yet.'}</p>
+                        <Link href={`/team/${teamId}/playbooks/${playbook.id}`} className="block">
+                          <p className="font-semibold group-hover:text-[var(--app-blue)] transition-colors">{playbook.name}</p>
+                          <p className="text-xs text-[var(--app-muted)]">{playbook.description ?? 'No description yet.'}</p>
+                        </Link>
                       </td>
                       <td className="py-3">
                         <span className={`status-pill ${playbook.status}`}>{playbook.status}</span>

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -39,19 +39,35 @@ from app.schemas.entities import (
     HealthOut,
     PlaybookCreate,
     PlaybookOut,
+    PlaybookUpdate,
     PlaybookVersionCreate,
     RunCreate,
     RunOut,
+    RunSummary,
     TeamBootstrapResponse,
     TeamOnboardingCreate,
     TeamSummary,
     UserSummary,
 )
 from app.services.gemini_live import GeminiLiveCaptureService
+from app.services.storage import public_url, upload_blob
 
 router = APIRouter()
 settings = get_settings()
 live_service = GeminiLiveCaptureService(model_name=settings.gemini_live_model)
+
+
+@router.post('/upload')
+async def upload_file(file: UploadFile = File(...)) -> dict:
+    """Upload a file to MinIO blob storage, return the object key and public URL."""
+    data = await file.read()
+    object_key = await upload_blob(
+        data,
+        filename=file.filename,
+        content_type=file.content_type or 'application/octet-stream',
+        folder='evidence',
+    )
+    return {'object_key': object_key, 'url': public_url(object_key)}
 
 
 @router.get('/health', response_model=HealthOut)
@@ -503,7 +519,7 @@ async def create_run(team_id: str, payload: RunCreate, db: AsyncSession = Depend
                 step_title='Verify preconditions',
                 status='success' if is_success else 'error',
                 message='Verification passed' if is_success else 'Verification failed, run paused',
-                screenshot_url='https://picsum.photos/seed/memoo-evidence-verify/1200/700',
+                screenshot_url=None,
             )
         )
 
@@ -636,6 +652,52 @@ async def live_capture_ws(websocket: WebSocket, capture_session_id: str) -> None
             )
     except WebSocketDisconnect:
         return
+
+
+@router.get('/teams/{team_id}/runs', response_model=list[RunSummary])
+async def list_team_runs(team_id: str, db: AsyncSession = Depends(get_db)) -> list[RunSummary]:
+    team = await db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail='Team not found.')
+
+    rows = await db.execute(
+        select(Run, Playbook.name.label('playbook_name'))
+        .join(PlaybookVersion, PlaybookVersion.id == Run.playbook_version_id)
+        .join(Playbook, Playbook.id == PlaybookVersion.playbook_id)
+        .where(Run.team_id == team_id)
+        .order_by(desc(Run.started_at))
+    )
+
+    results = []
+    for run, playbook_name in rows.all():
+        data = RunOut.model_validate(run, from_attributes=True).model_dump()
+        data['playbook_name'] = playbook_name
+        results.append(RunSummary(**data))
+    return results
+
+
+@router.patch('/playbooks/{playbook_id}', response_model=PlaybookOut)
+async def update_playbook(playbook_id: str, payload: PlaybookUpdate, db: AsyncSession = Depends(get_db)) -> PlaybookOut:
+    playbook = await db.get(Playbook, playbook_id)
+    if not playbook:
+        raise HTTPException(status_code=404, detail='Playbook not found.')
+
+    if payload.name is not None:
+        playbook.name = payload.name
+    if payload.description is not None:
+        playbook.description = payload.description
+    if payload.status is not None:
+        try:
+            playbook.status = PlaybookStatus(payload.status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f'Invalid status: {payload.status}')
+    if payload.tags is not None:
+        playbook.tags = payload.tags
+
+    playbook.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(playbook)
+    return PlaybookOut.model_validate(playbook, from_attributes=True)
 
 
 @router.post('/teams/{team_id}/invites')

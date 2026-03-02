@@ -12,8 +12,8 @@
   --app-sage: #7b9b86;
   --app-sand: #bf9b6a;
   --app-chip: rgba(95, 119, 132, 0.14);
-  --app-font-sans: var(--font-geist-sans);
-  --app-font-mono: var(--font-geist-mono);
+  --app-font-sans: var(--font-manrope);
+  --app-font-mono: var(--font-ibm-plex-mono);
 }
 
 @theme inline {
@@ -189,6 +189,30 @@ a {
 .status-pill.archived {
   background: rgba(191, 155, 106, 0.2);
   border-color: rgba(191, 155, 106, 0.45);
+  color: #7d5d31;
+}
+
+.status-pill.running {
+  background: rgba(95, 119, 132, 0.18);
+  border-color: rgba(95, 119, 132, 0.42);
+  color: #3f5e6f;
+}
+
+.status-pill.completed {
+  background: rgba(123, 155, 134, 0.2);
+  border-color: rgba(123, 155, 134, 0.42);
+  color: #335443;
+}
+
+.status-pill.failed {
+  background: rgba(191, 100, 100, 0.14);
+  border-color: rgba(191, 100, 100, 0.35);
+  color: #7a2828;
+}
+
+.status-pill.pending {
+  background: rgba(191, 155, 106, 0.16);
+  border-color: rgba(191, 155, 106, 0.38);
   color: #7d5d31;
 }
 

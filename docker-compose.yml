@@ -1,4 +1,5 @@
-version: '3.9'
+name: memoo
+
 services:
   postgres:
     image: postgres:16
@@ -12,6 +13,44 @@ services:
       - '5432:5432'
     volumes:
       - memoo_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U memoo -d memoo']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: memoo-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: memoo
+      MINIO_ROOT_PASSWORD: memoosecret
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - memoo_minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: memoo-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set memoo http://minio:9000 memoo memoosecret &&
+      mc mb --ignore-existing memoo/memoo-evidence &&
+      mc anonymous set download memoo/memoo-evidence &&
+      exit 0;
+      "
 
   adminer:
     image: adminer:latest
@@ -20,7 +59,56 @@ services:
     ports:
       - '8080:8080'
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: memoo-api
+    restart: unless-stopped
+    ports:
+      - '8000:8000'
+    # Bind-mount source so edits on the host trigger uvicorn --reload
+    volumes:
+      - ./apps/api:/app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://memoo:memoo@postgres:5432/memoo
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: memoo
+      MINIO_SECRET_KEY: memoosecret
+      MINIO_BUCKET: memoo-evidence
+      MINIO_USE_SSL: 'false'
+      MINIO_PUBLIC_URL: http://localhost:9000
+      CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: memoo-web
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    # Bind-mount source for hot-reload; anonymous volumes shadow
+    # node_modules and .next so container copy is used, not host's.
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+    depends_on:
+      - api
 
 volumes:
   memoo_pg_data:
+  memoo_minio_data:

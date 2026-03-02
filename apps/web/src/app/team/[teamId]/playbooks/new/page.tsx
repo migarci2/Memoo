@@ -1,8 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { use, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { CircleNotch, Sparkle, Trash } from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
+import { useToast } from '@/components/toast-provider';
 import { apiPost } from '@/lib/api';
 
 type StepInput = {
@@ -15,146 +18,211 @@ type PageProps = {
 };
 
 export default function NewPlaybookPage({ params }: PageProps) {
-  const [teamId, setTeamId] = useState('');
+  const { teamId } = use(params);
+  const router = useRouter();
+  const { toast } = useToast();
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [tags, setTags] = useState('ops, automation');
+  const [tags, setTags] = useState('');
   const [steps, setSteps] = useState<StepInput[]>([
     { title: 'Navigate to target page', step_type: 'navigate' },
-    { title: 'Fill input fields', step_type: 'input' },
-    { title: 'Submit and verify success', step_type: 'submit' },
+    { title: 'Fill in required fields', step_type: 'input' },
+    { title: 'Submit and verify', step_type: 'submit' },
   ]);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    params.then(value => setTeamId(value.teamId));
-  }, [params]);
+  const [polishing, setPolishing] = useState(false);
 
   function updateStep(index: number, patch: Partial<StepInput>) {
     setSteps(prev => prev.map((step, idx) => (idx === index ? { ...step, ...patch } : step)));
   }
 
   function addStep() {
-    setSteps(prev => [...prev, { title: 'New step', step_type: 'action' }]);
+    setSteps(prev => [...prev, { title: '', step_type: 'action' }]);
+  }
+
+  function removeStep(index: number) {
+    setSteps(prev => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
   }
 
   async function polishDescription() {
-    setMessage('Generating description...');
+    setPolishing(true);
     try {
       const res = await fetch('/api/ai/playbook-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: name || 'Untitled playbook',
-          steps: steps.map(step => step.title),
+          steps: steps.map(s => s.title),
         }),
       });
       const data = (await res.json()) as { summary: string };
       setDescription(data.summary);
-      setMessage('Description generated with Vercel AI SDK.');
+      toast('Description generated', 'success');
     } catch {
-      setMessage('Could not generate description.');
+      toast('Could not generate description', 'error');
+    } finally {
+      setPolishing(false);
     }
   }
 
-  async function savePlaybook() {
+  async function savePlaybook(e: React.FormEvent) {
+    e.preventDefault();
     if (!teamId || !name) return;
     setSaving(true);
-    setMessage(null);
 
     try {
-      await apiPost(`/teams/${teamId}/playbooks`, {
+      const created = await apiPost<{ id: string }>(`/teams/${teamId}/playbooks`, {
         team_id: teamId,
         name,
         description,
-        tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        steps: steps.map(step => ({
-          ...step,
-          variables: {},
-          guardrails: {},
-        })),
+        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+        steps: steps.map(step => ({ ...step, variables: {}, guardrails: {} })),
       });
-      setMessage('Playbook created successfully.');
+      toast('Playbook created!', 'success');
+      router.push(`/team/${teamId}/playbooks/${created.id}`);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Could not create playbook.');
+      toast(err instanceof Error ? err.message : 'Could not create playbook', 'error');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <PlatformShell
-      teamId={teamId}
-      title="Create Playbook"
-      subtitle="Define steps, generate concise copy with AI SDK, and publish versioned playbooks to your team workspace."
-    >
-      <section className="panel p-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium">
-            Playbook name
-            <input className="input" value={name} onChange={event => setName(event.target.value)} />
-          </label>
-          <label className="grid gap-2 text-sm font-medium">
-            Tags (comma separated)
-            <input className="input" value={tags} onChange={event => setTags(event.target.value)} />
-          </label>
-        </div>
+    <PlatformShell teamId={teamId}>
+      <div className="mb-6">
+        <p className="landing-kicker">Automation</p>
+        <h1 className="mt-1 text-4xl font-extrabold tracking-tight">New playbook</h1>
+      </div>
 
-        <label className="mt-4 grid gap-2 text-sm font-medium">
-          Description
-          <textarea
-            className="input min-h-28"
-            value={description}
-            onChange={event => setDescription(event.target.value)}
-          />
-        </label>
-
-        <button className="btn-secondary mt-3" onClick={polishDescription} type="button">
-          AI polish description
-        </button>
-
-        <div className="mt-5 grid gap-3">
-          {steps.map((step, index) => (
-            <div key={`step-${index}`} className="panel-tight grid gap-3 p-4 md:grid-cols-[1fr_160px]">
-              <label className="grid gap-2 text-sm font-medium">
-                Step title
-                <input
-                  className="input"
-                  value={step.title}
-                  onChange={event => updateStep(index, { title: event.target.value })}
-                />
+      <form onSubmit={savePlaybook} className="max-w-2xl space-y-6">
+        {/* Basic info */}
+        <div className="panel p-6">
+          <h2 className="mb-4 text-lg font-bold">Basic info</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold">
+                Name <span className="text-red-500">*</span>
               </label>
-              <label className="grid gap-2 text-sm font-medium">
-                Type
-                <select
-                  className="input"
-                  value={step.step_type}
-                  onChange={event => updateStep(index, { step_type: event.target.value })}
-                >
-                  <option value="navigate">navigate</option>
-                  <option value="input">input</option>
-                  <option value="click">click</option>
-                  <option value="submit">submit</option>
-                  <option value="validate">validate</option>
-                  <option value="action">action</option>
-                </select>
-              </label>
+              <input
+                required
+                className="input"
+                placeholder="e.g. Onboard new customer"
+                value={name}
+                onChange={e => setName(e.target.value)}
+              />
             </div>
-          ))}
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold">Tags</label>
+              <input
+                className="input"
+                placeholder="ops, billing, crm"
+                value={tags}
+                onChange={e => setTags(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-sm font-semibold">Description</label>
+              <button
+                type="button"
+                onClick={polishDescription}
+                disabled={polishing}
+                className="flex items-center gap-1.5 text-xs font-semibold text-[var(--app-blue)] hover:underline disabled:opacity-60"
+              >
+                {polishing ? (
+                  <span className="animate-spin inline-flex"><CircleNotch size={13} /></span>
+                ) : (
+                  <Sparkle size={13} />
+                )}
+                AI generate
+              </button>
+            </div>
+            <textarea
+              className="input min-h-[6rem]"
+              placeholder="Describe what this playbook does…"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button className="btn-secondary" onClick={addStep} type="button">
-            Add step
-          </button>
-          <button className="btn-primary" disabled={saving} onClick={savePlaybook} type="button">
-            {saving ? 'Saving...' : 'Create playbook'}
-          </button>
+        {/* Steps */}
+        <div className="panel p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-bold">Steps</h2>
+            <button
+              type="button"
+              onClick={addStep}
+              className="btn-secondary rounded-full px-3 py-1.5 text-xs"
+            >
+              + Add step
+            </button>
+          </div>
+          <div className="space-y-3">
+            {steps.map((step, index) => (
+              <div
+                key={index}
+                className="grid items-end gap-3 rounded-xl border border-[var(--app-line)] bg-[var(--app-surface-2)]/40 p-4 sm:grid-cols-[1fr_160px_auto]"
+              >
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-[var(--app-muted)]">
+                    Step {index + 1}
+                  </label>
+                  <input
+                    className="input text-sm"
+                    placeholder="Step title"
+                    value={step.title}
+                    onChange={e => updateStep(index, { title: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-[var(--app-muted)]">
+                    Type
+                  </label>
+                  <select
+                    className="input text-sm"
+                    value={step.step_type}
+                    onChange={e => updateStep(index, { step_type: e.target.value })}
+                  >
+                    <option value="navigate">navigate</option>
+                    <option value="input">input</option>
+                    <option value="click">click</option>
+                    <option value="submit">submit</option>
+                    <option value="validate">validate</option>
+                    <option value="action">action</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeStep(index)}
+                  disabled={steps.length === 1}
+                  className="mb-px text-[var(--app-muted)] transition-colors hover:text-red-500 disabled:opacity-30"
+                  aria-label="Remove step"
+                >
+                  <Trash size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {message ? <p className="mt-3 text-sm text-[var(--app-muted)]">{message}</p> : null}
-      </section>
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            disabled={saving || !name}
+            className="btn-primary flex items-center gap-2 rounded-full px-6 py-2.5 font-semibold disabled:opacity-60"
+          >
+            {saving && <span className="animate-spin inline-flex"><CircleNotch size={16} /></span>}
+            Create playbook
+          </button>
+          <a href={`/team/${teamId}/playbooks`} className="btn-secondary rounded-full px-5 py-2.5 text-sm">
+            Cancel
+          </a>
+        </div>
+      </form>
     </PlatformShell>
   );
 }

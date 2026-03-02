@@ -138,6 +138,30 @@ class RunOut(BaseModel):
     ended_at: datetime | None
 
 
+class PlaybookUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    status: str | None = None
+    tags: list[str] | None = None
+
+
+class RunSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    team_id: str
+    playbook_version_id: str
+    status: str
+    trigger_type: str
+    input_source: str
+    total_items: int
+    success_count: int
+    failed_count: int
+    started_at: datetime
+    ended_at: datetime | None
+    playbook_name: str | None = None
+
+
 class HealthOut(BaseModel):
     status: str
     app: str
