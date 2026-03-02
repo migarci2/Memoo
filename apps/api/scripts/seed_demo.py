@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import random
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
-from sqlalchemy import delete, select
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.entities import (
-    Department,
+    CaptureSession,
+    CaptureStatus,
     Invite,
     Membership,
     MembershipRole,
@@ -18,8 +20,13 @@ from app.models.entities import (
     PlaybookStatus,
     PlaybookStep,
     PlaybookVersion,
+    Run,
+    RunEvent,
+    RunItem,
+    RunStatus,
     Team,
     User,
+    VaultCredential,
 )
 
 
@@ -44,13 +51,6 @@ async def seed() -> None:
         db.add(team)
         await db.flush()
 
-        # ── Departments ──────────────────────────────────────────────────
-        dept_eng = Department(team_id=team.id, name='Engineering', color='#5f7784')
-        dept_finance = Department(team_id=team.id, name='Finance', color='#bf9b6a')
-        dept_support = Department(team_id=team.id, name='Support', color='#7b9b86')
-        db.add_all([dept_eng, dept_finance, dept_support])
-        await db.flush()
-
         # ── Users ────────────────────────────────────────────────────────
         owner = User(
             email='amaya@northline.io',
@@ -58,27 +58,27 @@ async def seed() -> None:
             job_title='Head of Operations',
             password_hash=demo_pw,
         )
-        finance_user = User(
+        ops_user = User(
             email='marco@northline.io',
             full_name='Marco Ilan',
-            job_title='Finance Ops Lead',
+            job_title='Ops Lead',
             password_hash=demo_pw,
         )
-        support_user = User(
+        analyst = User(
             email='nina@northline.io',
             full_name='Nina Calder',
-            job_title='Support Supervisor',
+            job_title='Automation Analyst',
             password_hash=demo_pw,
         )
-        db.add_all([owner, finance_user, support_user])
+        db.add_all([owner, ops_user, analyst])
         await db.flush()
 
         # ── Memberships ─────────────────────────────────────────────────
         db.add_all(
             [
-                Membership(team_id=team.id, user_id=owner.id, role=MembershipRole.OWNER, department_id=dept_eng.id),
-                Membership(team_id=team.id, user_id=finance_user.id, role=MembershipRole.ADMIN, department_id=dept_finance.id),
-                Membership(team_id=team.id, user_id=support_user.id, role=MembershipRole.MEMBER, department_id=dept_support.id),
+                Membership(team_id=team.id, user_id=owner.id, role=MembershipRole.OWNER),
+                Membership(team_id=team.id, user_id=ops_user.id, role=MembershipRole.ADMIN),
+                Membership(team_id=team.id, user_id=analyst.id, role=MembershipRole.MEMBER),
             ]
         )
 
@@ -93,162 +93,277 @@ async def seed() -> None:
         )
 
         # ── Invites ──────────────────────────────────────────────────────
-        db.add_all(
-            [
-                Invite(
-                    team_id=team.id,
-                    email='finance-analyst@northline.io',
-                    role=MembershipRole.MEMBER,
-                    token='invite_finance_001',
-                    status='accepted',
-                    expires_at=now + timedelta(days=6),
-                ),
-                Invite(
-                    team_id=team.id,
-                    email='support-specialist@northline.io',
-                    role=MembershipRole.MEMBER,
-                    token='invite_support_001',
-                    status='pending',
-                    expires_at=now + timedelta(days=6),
-                ),
-            ]
+        db.add(
+            Invite(
+                team_id=team.id,
+                email='support@northline.io',
+                role=MembershipRole.MEMBER,
+                token='invite_support_001',
+                status='pending',
+                expires_at=now + timedelta(days=6),
+            )
         )
 
-        # ── Playbooks ───────────────────────────────────────────────────
-        playbook_hr = Playbook(
+        # ── Vault credentials ───────────────────────────────────────────
+        cred_google = VaultCredential(
             team_id=team.id,
+            name='Google Admin SA',
+            service='Google Workspace',
+            credential_type='api_key',
+            masked_value='AIza••••••••••Xq',
             created_by=owner.id,
-            name='Employee onboarding checklist',
-            description='Step-by-step guide for onboarding new hires: profile setup, benefits enrollment, and access provisioning.',
-            status=PlaybookStatus.ACTIVE,
-            tags=['hr', 'onboarding', 'hiring'],
-            department_id=dept_eng.id,
         )
-        playbook_finance = Playbook(
+        cred_jira = VaultCredential(
             team_id=team.id,
-            created_by=finance_user.id,
-            name='Invoice reconciliation process',
-            description='Validate invoice fields, match ledger entries, and document reconciliation steps.',
-            status=PlaybookStatus.ACTIVE,
-            tags=['finance', 'billing', 'reconciliation'],
-            department_id=dept_finance.id,
+            name='Jira API Token',
+            service='Jira',
+            credential_type='api_key',
+            masked_value='ATATT••••••••••5K',
+            created_by=ops_user.id,
         )
-        playbook_support = Playbook(
+        cred_slack = VaultCredential(
             team_id=team.id,
-            created_by=support_user.id,
-            name='Tier-1 ticket follow-up guide',
-            description='Standard procedure for handling first-response tickets: templates, CRM updates, and follow-up scheduling.',
-            status=PlaybookStatus.DRAFT,
-            tags=['support', 'tickets'],
-            department_id=dept_support.id,
+            name='Slack Bot Token',
+            service='Slack',
+            credential_type='oauth_token',
+            masked_value='xoxb-••••••••••Rw',
+            created_by=analyst.id,
         )
-        db.add_all([playbook_hr, playbook_finance, playbook_support])
+        db.add_all([cred_google, cred_jira, cred_slack])
         await db.flush()
 
-        # ── Playbook versions ────────────────────────────────────────────
-        hr_v1 = PlaybookVersion(
-            playbook_id=playbook_hr.id,
+        # ── Capture session (completed + compiled) ───────────────────────
+        capture_events = [
+            {'kind': 'navigate', 'url': 'https://admin.google.com/ac/users', 'timestamp': 0},
+            {'kind': 'click', 'selector': 'button.add-user', 'text': 'Add a user', 'timestamp': 2},
+            {'kind': 'input', 'selector': '#firstName', 'value': '{{first_name}}', 'timestamp': 4},
+            {'kind': 'input', 'selector': '#lastName', 'value': '{{last_name}}', 'timestamp': 5},
+            {'kind': 'input', 'selector': '#primaryEmail', 'value': '{{email}}', 'timestamp': 6},
+            {'kind': 'submit', 'selector': 'form.new-user', 'text': 'Create user', 'timestamp': 8},
+            {'kind': 'verify', 'selector': '.success-banner', 'text': 'User created successfully', 'timestamp': 10},
+        ]
+
+        capture = CaptureSession(
+            team_id=team.id,
+            user_id=owner.id,
+            title='Google Workspace user provisioning',
+            status=CaptureStatus.COMPILED,
+            raw_events=capture_events,
+            started_at=now - timedelta(hours=6),
+            ended_at=now - timedelta(hours=5, minutes=50),
+        )
+        db.add(capture)
+        await db.flush()
+
+        # ── Playbooks (compiled from capture + manual) ───────────────────
+        playbook_provision = Playbook(
+            team_id=team.id,
+            created_by=owner.id,
+            name='Google Workspace user provisioning',
+            description='Automated workflow to provision new employees in Google Admin. Compiled from recorded capture session with Gemini.',
+            status=PlaybookStatus.PUBLISHED,
+            tags=['google', 'provisioning', 'onboarding'],
+        )
+        playbook_jira = Playbook(
+            team_id=team.id,
+            created_by=ops_user.id,
+            name='Jira ticket triage & assignment',
+            description='Automate ticket triage: classify priority, assign to team, post Slack notification.',
+            status=PlaybookStatus.PUBLISHED,
+            tags=['jira', 'triage', 'tickets'],
+        )
+        playbook_offboard = Playbook(
+            team_id=team.id,
+            created_by=analyst.id,
+            name='Employee offboarding checklist',
+            description='Revoke access across Google, Jira, and Slack for departing employees.',
+            status=PlaybookStatus.DRAFT,
+            tags=['offboarding', 'security'],
+        )
+        db.add_all([playbook_provision, playbook_jira, playbook_offboard])
+        await db.flush()
+
+        # Link capture to playbook
+        capture.playbook_id = playbook_provision.id
+
+        # ── Versions + Steps ─────────────────────────────────────────────
+        prov_v1 = PlaybookVersion(
+            playbook_id=playbook_provision.id,
             version_number=1,
             created_by=owner.id,
-            change_note='Initial version',
+            change_note='Compiled by Gemini from capture session',
             graph={},
-            created_at=now - timedelta(days=8),
+            created_at=now - timedelta(hours=5, minutes=45),
         )
-        fin_v1 = PlaybookVersion(
-            playbook_id=playbook_finance.id,
+        jira_v1 = PlaybookVersion(
+            playbook_id=playbook_jira.id,
             version_number=1,
-            created_by=finance_user.id,
+            created_by=ops_user.id,
             change_note='Initial version',
-            graph={},
-            created_at=now - timedelta(days=5),
-        )
-        sup_v1 = PlaybookVersion(
-            playbook_id=playbook_support.id,
-            version_number=1,
-            created_by=support_user.id,
-            change_note='Draft version',
             graph={},
             created_at=now - timedelta(days=2),
         )
-        db.add_all([hr_v1, fin_v1, sup_v1])
+        off_v1 = PlaybookVersion(
+            playbook_id=playbook_offboard.id,
+            version_number=1,
+            created_by=analyst.id,
+            change_note='Draft',
+            graph={},
+            created_at=now - timedelta(days=1),
+        )
+        db.add_all([prov_v1, jira_v1, off_v1])
         await db.flush()
 
-        # ── Playbook steps ───────────────────────────────────────────────
         db.add_all(
             [
-                PlaybookStep(
-                    playbook_version_id=hr_v1.id,
-                    sequence=1,
-                    title='Open HRIS and navigate to new employee form',
-                    step_type='navigate',
-                    target_url='https://hris.internal/profiles/new',
-                    selector='',
-                    variables={},
-                    guardrails={},
-                ),
-                PlaybookStep(
-                    playbook_version_id=hr_v1.id,
-                    sequence=2,
-                    title='Fill in employee personal details',
-                    step_type='input',
-                    selector='',
-                    variables={},
-                    guardrails={},
-                ),
-                PlaybookStep(
-                    playbook_version_id=hr_v1.id,
-                    sequence=3,
-                    title='Submit profile and confirm success',
-                    step_type='submit',
-                    selector='',
-                    variables={},
-                    guardrails={},
-                ),
-                PlaybookStep(
-                    playbook_version_id=fin_v1.id,
-                    sequence=1,
-                    title='Open invoice in vendor portal',
-                    step_type='navigate',
-                    target_url='https://vendors.example.com/invoices',
-                    selector='',
-                    variables={},
-                    guardrails={},
-                ),
-                PlaybookStep(
-                    playbook_version_id=fin_v1.id,
-                    sequence=2,
-                    title='Compare amount and PO number with ledger',
-                    step_type='action',
-                    selector='',
-                    variables={},
-                    guardrails={},
-                ),
-                PlaybookStep(
-                    playbook_version_id=fin_v1.id,
-                    sequence=3,
-                    title='Mark as reconciled and attach documentation',
-                    step_type='action',
-                    selector='',
-                    variables={},
-                    guardrails={},
-                ),
-                PlaybookStep(
-                    playbook_version_id=sup_v1.id,
-                    sequence=1,
-                    title='Open support ticket and review context',
-                    step_type='navigate',
-                    target_url='https://support.example.com/tickets',
-                    selector='',
-                    variables={},
-                    guardrails={},
-                ),
+                # Provision steps
+                PlaybookStep(playbook_version_id=prov_v1.id, sequence=1, title='Open Google Admin Console', step_type='navigate', target_url='https://admin.google.com/ac/users', selector='', variables={}, guardrails={}),
+                PlaybookStep(playbook_version_id=prov_v1.id, sequence=2, title='Click Add a user', step_type='click', selector='button.add-user', variables={}, guardrails={}),
+                PlaybookStep(playbook_version_id=prov_v1.id, sequence=3, title='Enter first name', step_type='input', selector='#firstName', variables={'first_name': 'string'}, guardrails={'required': True}),
+                PlaybookStep(playbook_version_id=prov_v1.id, sequence=4, title='Enter last name', step_type='input', selector='#lastName', variables={'last_name': 'string'}, guardrails={'required': True}),
+                PlaybookStep(playbook_version_id=prov_v1.id, sequence=5, title='Enter email address', step_type='input', selector='#primaryEmail', variables={'email': 'email'}, guardrails={'format': 'email'}),
+                PlaybookStep(playbook_version_id=prov_v1.id, sequence=6, title='Submit new user form', step_type='submit', selector='form.new-user', variables={}, guardrails={}),
+                PlaybookStep(playbook_version_id=prov_v1.id, sequence=7, title='Verify user created successfully', step_type='verify', selector='.success-banner', variables={}, guardrails={'expected_text': 'User created successfully'}),
+                # Jira steps
+                PlaybookStep(playbook_version_id=jira_v1.id, sequence=1, title='Open Jira inbox', step_type='navigate', target_url='https://northline.atlassian.net/jira/servicedesk/queue', selector='', variables={}, guardrails={}),
+                PlaybookStep(playbook_version_id=jira_v1.id, sequence=2, title='Read ticket summary and classify priority', step_type='action', selector='', variables={'ticket_id': 'string'}, guardrails={}),
+                PlaybookStep(playbook_version_id=jira_v1.id, sequence=3, title='Assign to team lead', step_type='action', selector='', variables={'assignee': 'string'}, guardrails={}),
+                PlaybookStep(playbook_version_id=jira_v1.id, sequence=4, title='Post assignment to Slack #ops-tickets', step_type='action', selector='', variables={}, guardrails={}),
+                # Offboard steps
+                PlaybookStep(playbook_version_id=off_v1.id, sequence=1, title='Revoke Google Workspace access', step_type='action', selector='', variables={'employee_email': 'email'}, guardrails={}),
+                PlaybookStep(playbook_version_id=off_v1.id, sequence=2, title='Deactivate Jira account', step_type='action', selector='', variables={}, guardrails={}),
+                PlaybookStep(playbook_version_id=off_v1.id, sequence=3, title='Remove from Slack workspace', step_type='action', selector='', variables={}, guardrails={}),
             ]
         )
+
+        # ── Run (completed, provisioning 3 employees) ───────────────────
+        run = Run(
+            team_id=team.id,
+            playbook_id=playbook_provision.id,
+            playbook_version_id=prov_v1.id,
+            status=RunStatus.COMPLETED,
+            trigger_type='manual',
+            input_source='csv_paste',
+            total_items=3,
+            success_count=3,
+            failed_count=0,
+            started_at=now - timedelta(hours=3),
+            ended_at=now - timedelta(hours=2, minutes=55),
+        )
+        db.add(run)
+        await db.flush()
+
+        employees = [
+            {'first_name': 'Alice', 'last_name': 'Strand', 'email': 'alice@northline.io'},
+            {'first_name': 'Bjorn', 'last_name': 'Moen', 'email': 'bjorn@northline.io'},
+            {'first_name': 'Clara', 'last_name': 'Dahlin', 'email': 'clara@northline.io'},
+        ]
+
+        step_titles = [
+            'Open Google Admin Console',
+            'Click Add a user',
+            'Enter first name',
+            'Enter last name',
+            'Enter email address',
+            'Submit new user form',
+            'Verify user created successfully',
+        ]
+
+        for row_idx, emp in enumerate(employees):
+            item = RunItem(
+                run_id=run.id,
+                row_index=row_idx,
+                input_payload=emp,
+                status=RunStatus.COMPLETED,
+            )
+            db.add(item)
+            await db.flush()
+
+            for step_seq, step_title in enumerate(step_titles, start=1):
+                vault_used = None
+                if step_seq in (1, 6):  # navigate & submit use Google cred
+                    vault_used = 'Google Admin SA'
+
+                db.add(
+                    RunEvent(
+                        run_item_id=item.id,
+                        step_sequence=step_seq,
+                        step_title=step_title,
+                        status='success',
+                        expected_state=f'Step {step_seq} complete' if step_seq < 7 else 'User created successfully',
+                        actual_state=f'Step {step_seq} complete' if step_seq < 7 else 'User created successfully',
+                        vault_credential_used=vault_used,
+                    )
+                )
+
+        # ── Second run (partially failed — Jira triage) ─────────────────
+        run2 = Run(
+            team_id=team.id,
+            playbook_id=playbook_jira.id,
+            playbook_version_id=jira_v1.id,
+            status=RunStatus.COMPLETED,
+            trigger_type='manual',
+            input_source='manual',
+            total_items=2,
+            success_count=1,
+            failed_count=1,
+            started_at=now - timedelta(hours=1),
+            ended_at=now - timedelta(minutes=55),
+        )
+        db.add(run2)
+        await db.flush()
+
+        tickets = [
+            {'ticket_id': 'OPS-142', 'assignee': 'Marco Ilan'},
+            {'ticket_id': 'OPS-143', 'assignee': 'Nina Calder'},
+        ]
+
+        jira_step_titles = [
+            'Open Jira inbox',
+            'Read ticket summary and classify priority',
+            'Assign to team lead',
+            'Post assignment to Slack #ops-tickets',
+        ]
+
+        for row_idx, ticket in enumerate(tickets):
+            item_status = RunStatus.COMPLETED if row_idx == 0 else RunStatus.FAILED
+            item = RunItem(
+                run_id=run2.id,
+                row_index=row_idx,
+                input_payload=ticket,
+                status=item_status,
+            )
+            db.add(item)
+            await db.flush()
+
+            for step_seq, step_title in enumerate(jira_step_titles, start=1):
+                # Second item fails at step 3
+                if row_idx == 1 and step_seq >= 3:
+                    ev_status = 'failed' if step_seq == 3 else 'pending'
+                else:
+                    ev_status = 'success'
+
+                vault_used = 'Jira API Token' if step_seq in (1, 3) else None
+                if step_seq == 4 and ev_status == 'success':
+                    vault_used = 'Slack Bot Token'
+
+                db.add(
+                    RunEvent(
+                        run_item_id=item.id,
+                        step_sequence=step_seq,
+                        step_title=step_title,
+                        status=ev_status,
+                        expected_state=f'{step_title} — done',
+                        actual_state=f'{step_title} — done' if ev_status == 'success' else 'Assignee not found in project',
+                        vault_credential_used=vault_used,
+                    )
+                )
 
         await db.commit()
 
     print('Seed complete: Northline Operations demo team created.')
     print('Login: amaya@northline.io / demo1234')
+    print('Demo includes: 3 playbooks, 3 vault credentials, 2 runs with verification logs')
 
 
 if __name__ == '__main__':

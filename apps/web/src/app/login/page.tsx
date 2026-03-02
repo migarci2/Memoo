@@ -1,11 +1,17 @@
 'use client';
 
-import { CircleNotch } from '@phosphor-icons/react';
+import { CircleNotch, Lightning } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
+
+const DEV_CREDENTIALS = {
+  team_slug: 'northline-ops',
+  email: 'amaya@northline.io',
+  password: 'demo1234',
+};
 
 function LoginForm() {
   const router = useRouter();
@@ -13,7 +19,16 @@ function LoginForm() {
   const { login } = useAuth();
   const [form, setForm] = useState({ team_slug: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const [devLoading, setDevLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function doLogin(creds: { team_slug: string; email: string; password: string }) {
+    await login(creds.team_slug, creds.email, creds.password);
+    const redirect = searchParams.get('redirect');
+    const { getSession } = await import('@/lib/auth');
+    const session = getSession();
+    router.push(redirect ?? `/team/${session?.team_id ?? ''}`);
+  }
 
   async function submit() {
     if (!form.team_slug.trim() || !form.email.trim() || !form.password) {
@@ -23,15 +38,23 @@ function LoginForm() {
     setLoading(true);
     setError(null);
     try {
-      await login(form.team_slug, form.email, form.password);
-      const redirect = searchParams.get('redirect');
-      const { getSession } = await import('@/lib/auth');
-      const session = getSession();
-      router.push(redirect ?? `/team/${session?.team_id ?? ''}`);
+      await doLogin(form);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not sign in.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function devLogin() {
+    setDevLoading(true);
+    setError(null);
+    try {
+      await doLogin(DEV_CREDENTIALS);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not sign in with dev account.');
+    } finally {
+      setDevLoading(false);
     }
   }
 
@@ -94,13 +117,29 @@ function LoginForm() {
 
           <button
             className="btn-primary mt-5 inline-flex w-full items-center justify-center gap-2 py-2.5 text-sm"
-            disabled={loading}
+            disabled={loading || devLoading}
             onClick={submit}
             type="button"
           >
             {loading ? <span className="animate-spin inline-flex"><CircleNotch size={16} /></span> : null}
             {loading ? 'Signing in…' : 'Log in'}
           </button>
+
+          <div className="relative mt-4">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[var(--app-border)]" /></div>
+            <div className="relative flex justify-center text-xs"><span className="bg-[var(--app-surface)] px-2 text-[var(--app-muted)]">or</span></div>
+          </div>
+
+          <button
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50"
+            disabled={loading || devLoading}
+            onClick={devLogin}
+            type="button"
+          >
+            {devLoading ? <span className="animate-spin inline-flex"><CircleNotch size={16} /></span> : <Lightning size={16} weight="fill" />}
+            {devLoading ? 'Signing in…' : 'Dev Login'}
+          </button>
+          <p className="mt-1.5 text-center text-[11px] text-[var(--app-muted)]">amaya@northline.io · northline-ops</p>
         </div>
 
         <p className="mt-5 text-center text-sm text-[var(--app-muted)]">

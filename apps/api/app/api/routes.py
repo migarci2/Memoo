@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import random
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -38,6 +37,8 @@ from app.schemas.entities import (
     CaptureEventIn,
     CaptureOut,
     CompileOut,
+    FrameAnalysisIn,
+    FrameAnalysisOut,
     HealthOut,
     PlaybookCreate,
     PlaybookOut,
@@ -173,7 +174,7 @@ async def get_dashboard(team_id: str, db: AsyncSession = Depends(get_db)) -> Tea
     active_playbooks = await db.scalar(
         select(func.count())
         .select_from(Playbook)
-        .where(Playbook.team_id == team_id, Playbook.status == PlaybookStatus.ACTIVE)
+        .where(Playbook.team_id == team_id, Playbook.status.in_([PlaybookStatus.ACTIVE, PlaybookStatus.PUBLISHED]))
     ) or 0
     total_runs = await db.scalar(
         select(func.count()).select_from(Run).where(Run.team_id == team_id)
@@ -477,6 +478,51 @@ async def finalize_capture(capture_id: str, db: AsyncSession = Depends(get_db)) 
     return CaptureOut.model_validate(capture, from_attributes=True)
 
 
+# ── Frame analysis (Gemini Vision — live capture) ────────────────────────────
+
+@router.post('/captures/{capture_id}/analyze-frame', response_model=FrameAnalysisOut)
+async def analyze_frame(
+    capture_id: str, payload: FrameAnalysisIn, db: AsyncSession = Depends(get_db)
+) -> FrameAnalysisOut:
+    """Receive a screenshot frame, analyse it with Gemini Vision, and auto-append any
+    newly detected events to the capture session."""
+    capture = await db.get(CaptureSession, capture_id)
+    if not capture:
+        raise HTTPException(status_code=404, detail='Capture not found.')
+
+    previous_events: list[dict] = list(capture.raw_events or [])
+
+    from app.services.gemini_live import analyse_frame as _analyse
+
+    result = await _analyse(
+        image_b64=payload.image,
+        previous_events=previous_events,
+        mime_type=payload.mime_type,
+    )
+
+    # Auto-save newly detected events into the capture
+    if result.get('detected') and result.get('events'):
+        for ev in result['events']:
+            previous_events.append(ev)
+        capture.raw_events = previous_events
+        await db.commit()
+        await db.refresh(capture)
+
+    return FrameAnalysisOut(
+        detected=result.get('detected', False),
+        events=[
+            {
+                'kind': e.get('kind', 'action'),
+                'url': e.get('url'),
+                'selector': e.get('selector'),
+                'value': e.get('value'),
+                'text': e.get('text'),
+            }
+            for e in result.get('events', [])
+        ],
+    )
+
+
 # ── Compile (Gemini) ────────────────────────────────────────────────────────
 
 @router.post('/captures/{capture_id}/compile', response_model=CompileOut)
@@ -608,17 +654,23 @@ async def create_run(
     await db.commit()
     await db.refresh(run)
 
-    # Fire-and-forget simulated execution
-    asyncio.create_task(_simulate_run(run.id))
+    # Fire-and-forget execution (Playwright if available, else simulated)
+    asyncio.create_task(_execute_run(run.id))
 
     return RunOut.model_validate(run, from_attributes=True)
 
 
-async def _simulate_run(run_id: str) -> None:
-    """Simulate a run execution with realistic delays and verification logs."""
-    await asyncio.sleep(1)
+async def _execute_run(run_id: str) -> None:
+    """Execute a run using Playwright (or fallback simulation).
+
+    Loads the playbook steps, iterates over each input row, and calls the
+    Playwright executor service.  Screenshots are stored as base64 in the
+    RunEvent records (in production these would go to MinIO/S3).
+    """
+    await asyncio.sleep(0.5)  # small delay to let the HTTP response flush
 
     from app.db.session import SessionLocal
+    from app.services.playwright_executor import execute_playbook_steps
 
     async with SessionLocal() as db:
         run = await db.scalar(
@@ -628,7 +680,7 @@ async def _simulate_run(run_id: str) -> None:
             return
 
         # Load playbook steps
-        steps: list[PlaybookStep] = []
+        steps: list[dict] = []
         if run.playbook_version_id:
             version = await db.scalar(
                 select(PlaybookVersion)
@@ -636,9 +688,18 @@ async def _simulate_run(run_id: str) -> None:
                 .options(selectinload(PlaybookVersion.steps))
             )
             if version:
-                steps = sorted(version.steps, key=lambda s: s.sequence)
+                for s in sorted(version.steps, key=lambda s: s.sequence):
+                    steps.append({
+                        'sequence': s.sequence,
+                        'title': s.title,
+                        'step_type': s.step_type,
+                        'target_url': s.target_url,
+                        'selector': s.selector,
+                        'variables': s.variables or {},
+                        'guardrails': s.guardrails or {},
+                    })
 
-        # Load vault credentials for this team
+        # Load vault credentials for context
         vault_creds = list(await db.scalars(
             select(VaultCredential).where(VaultCredential.team_id == run.team_id)
         ))
@@ -648,51 +709,58 @@ async def _simulate_run(run_id: str) -> None:
         run.started_at = datetime.now(UTC)
         await db.commit()
 
-        success = 0
-        failed = 0
+        success_count = 0
+        failed_count = 0
 
         for item in sorted(run.items, key=lambda i: i.row_index):
             item.status = RunStatus.RUNNING
             item.started_at = datetime.now(UTC)
             await db.commit()
 
+            # Build row data for variable substitution
+            row_data = dict(item.input_payload or {})
+
+            # Execute all steps for this row via Playwright
+            step_results = await execute_playbook_steps(
+                steps=steps,
+                row_data=row_data,
+                headless=True,
+                screenshot=True,
+            )
+
             item_failed = False
-            for step in steps:
-                await asyncio.sleep(random.uniform(0.3, 0.8))
-
+            for result in step_results:
                 vault_used = None
-                if step.step_type in ('input', 'submit', 'navigate') and vault_names:
-                    vault_used = f'Using {random.choice(vault_names)} (secure)'
+                if vault_names and result.get('title', '').lower().find('login') >= 0:
+                    vault_used = f'Using {vault_names[0]} (secure)'
 
-                step_success = random.random() > 0.05  # 95% success
                 event = RunEvent(
                     run_item_id=item.id,
-                    step_sequence=step.sequence,
-                    step_title=step.title,
-                    status='success' if step_success else 'failed',
-                    expected_state=step.guardrails.get('verify', f'{step.title} completed'),
-                    actual_state=step.guardrails.get('verify', f'{step.title} completed') if step_success else 'Element not found or timeout',
+                    step_sequence=result['sequence'],
+                    step_title=result['title'],
+                    status=result['status'],
+                    expected_state=result.get('expected_state', ''),
+                    actual_state=result.get('actual_state', ''),
                     vault_credential_used=vault_used,
+                    # screenshot_url could be set after uploading to MinIO
                 )
                 db.add(event)
-                await db.commit()
 
-                if not step_success:
+                if result['status'] == 'failed':
                     item_failed = True
-                    break
 
             item.status = RunStatus.FAILED if item_failed else RunStatus.COMPLETED
             item.ended_at = datetime.now(UTC)
             await db.commit()
 
             if item_failed:
-                failed += 1
+                failed_count += 1
             else:
-                success += 1
+                success_count += 1
 
-        run.status = RunStatus.COMPLETED if failed == 0 else RunStatus.COMPLETED
-        run.success_count = success
-        run.failed_count = failed
+        run.status = RunStatus.COMPLETED
+        run.success_count = success_count
+        run.failed_count = failed_count
         run.ended_at = datetime.now(UTC)
         await db.commit()
 

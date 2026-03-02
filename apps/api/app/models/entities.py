@@ -25,6 +25,7 @@ class MembershipRole(StrEnum):
 class PlaybookStatus(StrEnum):
     DRAFT = 'draft'
     ACTIVE = 'active'
+    PUBLISHED = 'published'
     ARCHIVED = 'archived'
 
 

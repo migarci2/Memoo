@@ -150,6 +150,26 @@ class CompileOut(BaseModel):
     steps_count: int
 
 
+# ── Frame Analysis (live Gemini Vision) ──────────────────────────────────────
+
+class FrameAnalysisIn(BaseModel):
+    image: str  # base64-encoded JPEG/PNG
+    mime_type: str = 'image/jpeg'
+
+
+class FrameAnalysisEvent(BaseModel):
+    kind: str
+    url: str | None = None
+    selector: str | None = None
+    value: str | None = None
+    text: str | None = None
+
+
+class FrameAnalysisOut(BaseModel):
+    detected: bool
+    events: list[FrameAnalysisEvent]
+
+
 # ── Run (batch execution) ───────────────────────────────────────────────────
 
 class RunCreate(BaseModel):

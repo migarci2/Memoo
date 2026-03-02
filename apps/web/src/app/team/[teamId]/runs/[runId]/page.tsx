@@ -15,6 +15,7 @@ import { apiGet } from '@/lib/api';
 import type { RunDetail, RunEvent, RunItem } from '@/lib/types';
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
+  completed: <CheckCircle size={16} weight="fill" className="text-[#4a8c61]" />,
   success: <CheckCircle size={16} weight="fill" className="text-[#4a8c61]" />,
   failed: <XCircle size={16} weight="fill" className="text-[#b04040]" />,
   pending: <CircleNotch size={16} className="text-[var(--app-muted)]" />,
@@ -129,7 +130,7 @@ export default function RunDetailPage() {
                     : `Item ${idx + 1}`}
                 </span>
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold capitalize ${
-                  item.status === 'success'
+                  item.status === 'completed'
                     ? 'bg-[rgba(123,155,134,0.18)] text-[#335443]'
                     : item.status === 'failed'
                     ? 'bg-[rgba(191,100,100,0.18)] text-[#8b3a3a]'

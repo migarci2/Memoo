@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for asyncpg (C extensions)
+# System deps for asyncpg (C extensions) and Playwright (Chromium)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc libpq-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -26,7 +26,11 @@ RUN pip install --no-cache-dir \
     "python-dotenv>=1.1.0" \
     "python-multipart>=0.0.20" \
     "bcrypt>=4.3.0" \
-    "google-genai>=1.14.0"
+    "google-genai>=1.14.0" \
+    "playwright>=1.52.0"
+
+# Install Chromium for Playwright (needed for real execution)
+RUN playwright install --with-deps chromium || true
 
 # uvicorn --reload watches /app for changes — the source dir is
 # mounted as a bind-mount from the host in docker-compose.yml

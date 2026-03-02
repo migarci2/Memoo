@@ -101,6 +101,21 @@ export type CompileResult = {
   steps_count: number;
 };
 
+// ── Frame Analysis (live Gemini Vision) ──────────────────────────────────
+
+export type FrameAnalysisEvent = {
+  kind: string;
+  url?: string | null;
+  selector?: string | null;
+  value?: string | null;
+  text?: string | null;
+};
+
+export type FrameAnalysisResult = {
+  detected: boolean;
+  events: FrameAnalysisEvent[];
+};
+
 // ── Runs (batch execution) ───────────────────────────────────────────────
 
 export type Run = {
