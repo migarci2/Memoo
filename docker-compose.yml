@@ -1,0 +1,26 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:16
+    container_name: memoo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: memoo
+      POSTGRES_USER: memoo
+      POSTGRES_PASSWORD: memoo
+    ports:
+      - '5432:5432'
+    volumes:
+      - memoo_pg_data:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer:latest
+    container_name: memoo-adminer
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    depends_on:
+      - postgres
+
+volumes:
+  memoo_pg_data:

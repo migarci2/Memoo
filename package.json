@@ -1,0 +1,25 @@
+{
+  "name": "@memoo/platform",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "npm run web:install && npm run api:install",
+    "dev": "concurrently -k -n api,web -c green,cyan \"npm run api:dev\" \"npm run web:dev\"",
+    "web:install": "npm install --workspace @memoo/web",
+    "web:dev": "npm run dev --workspace @memoo/web",
+    "web:build": "npm run build --workspace @memoo/web",
+    "web:lint": "npm run lint --workspace @memoo/web",
+    "api:install": "cd apps/api && python -m venv .venv && . .venv/bin/activate && pip install -e .",
+    "api:dev": "cd apps/api && . .venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "api:seed": "cd apps/api && . .venv/bin/activate && python scripts/seed_demo.py",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -1,0 +1,230 @@
+@import 'tailwindcss';
+
+:root {
+  --app-bg: #f2f0eb;
+  --app-surface: #fbf9f5;
+  --app-surface-2: #f7f4ee;
+  --app-text: #1b1d1f;
+  --app-muted: #5f666a;
+  --app-line: #d8d4cb;
+  --app-line-strong: #c4c0b5;
+  --app-blue: #5f7784;
+  --app-sage: #7b9b86;
+  --app-sand: #bf9b6a;
+  --app-chip: rgba(95, 119, 132, 0.14);
+  --app-font-sans: var(--font-geist-sans);
+  --app-font-mono: var(--font-geist-mono);
+}
+
+@theme inline {
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--app-font-sans), "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--app-text);
+  background:
+    radial-gradient(920px 440px at 92% -10%, rgba(95, 119, 132, 0.24), transparent 70%),
+    radial-gradient(760px 360px at -12% 44%, rgba(123, 155, 134, 0.2), transparent 72%),
+    radial-gradient(800px 280px at 65% 92%, rgba(191, 155, 106, 0.15), transparent 68%),
+    var(--app-bg);
+}
+
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.panel {
+  border: 1px solid var(--app-line);
+  background: linear-gradient(180deg, rgba(251, 249, 245, 0.94), rgba(251, 249, 245, 0.78));
+  border-radius: 24px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.panel-tight {
+  border: 1px solid var(--app-line);
+  background: linear-gradient(180deg, rgba(251, 249, 245, 0.9), rgba(251, 249, 245, 0.8));
+  border-radius: 16px;
+}
+
+.input {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--app-line-strong);
+  background: var(--app-surface);
+  padding: 0.7rem 0.9rem;
+  color: var(--app-text);
+}
+
+.input:focus {
+  outline: 2px solid rgba(95, 119, 132, 0.3);
+  border-color: rgba(95, 119, 132, 0.45);
+}
+
+.btn-primary {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, var(--app-blue), #4f6772);
+  color: var(--app-surface);
+  padding: 0.7rem 1.1rem;
+  font-weight: 700;
+}
+
+.btn-secondary {
+  border-radius: 999px;
+  border: 1px solid rgba(95, 119, 132, 0.22);
+  background: rgba(95, 119, 132, 0.12);
+  color: var(--app-blue);
+  padding: 0.7rem 1.1rem;
+  font-weight: 700;
+}
+
+.landing-shell {
+  min-height: 100dvh;
+}
+
+.landing-nav {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 30;
+}
+
+.landing-kicker {
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--app-blue);
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.logo-marquee {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.logo-track {
+  display: flex;
+  gap: 0.75rem;
+  width: max-content;
+  animation: marquee 32s linear infinite;
+}
+
+.logo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  white-space: nowrap;
+  border: 1px solid var(--app-line);
+  background: rgba(251, 249, 245, 0.78);
+  padding: 0.62rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  color: var(--app-muted);
+}
+
+.logo-pill-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--app-blue);
+}
+
+.hero-preview-grid {
+  background-image:
+    linear-gradient(to right, rgba(95, 119, 132, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(95, 119, 132, 0.12) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.chart-grid {
+  background-image:
+    linear-gradient(to right, rgba(95, 119, 132, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(95, 119, 132, 0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--app-line);
+  padding: 0.26rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.status-pill.active {
+  background: rgba(123, 155, 134, 0.2);
+  border-color: rgba(123, 155, 134, 0.42);
+  color: #335443;
+}
+
+.status-pill.draft {
+  background: rgba(95, 119, 132, 0.16);
+  border-color: rgba(95, 119, 132, 0.35);
+  color: #3f5e6f;
+}
+
+.status-pill.archived {
+  background: rgba(191, 155, 106, 0.2);
+  border-color: rgba(191, 155, 106, 0.45);
+  color: #7d5d31;
+}
+
+.donut-shell {
+  display: grid;
+  place-items: center;
+  width: 170px;
+  aspect-ratio: 1 / 1;
+  border-radius: 999px;
+}
+
+.donut-hole {
+  display: grid;
+  place-items: center;
+  width: 112px;
+  aspect-ratio: 1 / 1;
+  border-radius: 999px;
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 860px) {
+  .logo-track {
+    animation-duration: 26s;
+  }
+
+  .landing-nav {
+    top: 0.45rem;
+  }
+}
