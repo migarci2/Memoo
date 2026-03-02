@@ -135,12 +135,6 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
       >
         <Pencil size={12} weight="bold" /> Edit
       </button>
-      <a
-        href={`/team/${teamId}/runs/new?playbookId=${playbook.id}`}
-        className="btn-primary inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs"
-      >
-        Run this playbook
-      </a>
     </div>
   );
 }

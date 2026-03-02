@@ -3,6 +3,8 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
+# ── Auth ─────────────────────────────────────────────────────────────────────
+
 class TeamOnboardingCreate(BaseModel):
     team_name: str = Field(min_length=2, max_length=200)
     team_slug: str = Field(min_length=2, max_length=120)
@@ -10,11 +12,13 @@ class TeamOnboardingCreate(BaseModel):
     owner_name: str = Field(min_length=2, max_length=160)
     owner_email: EmailStr
     owner_title: str | None = None
+    password: str = Field(min_length=6, max_length=128)
 
 
 class AuthLoginIn(BaseModel):
     team_slug: str = Field(min_length=2, max_length=120)
     email: EmailStr
+    password: str = Field(min_length=1)
 
 
 class AuthLoginOut(BaseModel):
@@ -25,6 +29,8 @@ class AuthLoginOut(BaseModel):
     full_name: str
     role: str
 
+
+# ── Team & User ──────────────────────────────────────────────────────────────
 
 class TeamSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -52,13 +58,19 @@ class TeamBootstrapResponse(BaseModel):
     next_step: str
 
 
-class DashboardMetrics(BaseModel):
-    team_id: str
-    active_playbooks: int
-    draft_playbooks: int
-    runs_last_7_days: int
-    success_rate: float
+# ── Dashboard ────────────────────────────────────────────────────────────────
 
+class TeamOverview(BaseModel):
+    team_id: str
+    members_count: int
+    playbooks_count: int
+    active_playbooks: int
+    total_runs: int
+    successful_runs: int
+    vault_credentials: int
+
+
+# ── Playbook ─────────────────────────────────────────────────────────────────
 
 class PlaybookStepCreate(BaseModel):
     title: str
@@ -70,7 +82,6 @@ class PlaybookStepCreate(BaseModel):
 
 
 class PlaybookCreate(BaseModel):
-    team_id: str
     created_by: str | None = None
     name: str
     description: str | None = None
@@ -79,6 +90,8 @@ class PlaybookCreate(BaseModel):
 
 
 class PlaybookOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     team_id: str
     name: str
@@ -88,56 +101,6 @@ class PlaybookOut(BaseModel):
     created_at: datetime
 
 
-class PlaybookVersionCreate(BaseModel):
-    created_by: str | None = None
-    change_note: str | None = None
-    steps: list[PlaybookStepCreate] = Field(default_factory=list)
-
-
-class CaptureSessionStart(BaseModel):
-    team_id: str
-    user_id: str
-    title: str | None = None
-
-
-class CaptureEventIn(BaseModel):
-    timestamp: datetime
-    kind: str
-    target: str | None = None
-    value: str | None = None
-    url: str | None = None
-    metadata: dict = Field(default_factory=dict)
-
-
-class CaptureFinalizeIn(BaseModel):
-    create_playbook: bool = True
-    playbook_name: str | None = None
-    description: str | None = None
-    created_by: str | None = None
-
-
-class RunCreate(BaseModel):
-    team_id: str
-    playbook_version_id: str
-    trigger_type: str = 'manual'
-    input_source: str = 'list'
-    items: list[dict] = Field(default_factory=list)
-
-
-class RunOut(BaseModel):
-    id: str
-    team_id: str
-    playbook_version_id: str
-    status: str
-    trigger_type: str
-    input_source: str
-    total_items: int
-    success_count: int
-    failed_count: int
-    started_at: datetime
-    ended_at: datetime | None
-
-
 class PlaybookUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
@@ -145,22 +108,129 @@ class PlaybookUpdate(BaseModel):
     tags: list[str] | None = None
 
 
-class RunSummary(BaseModel):
+class PlaybookVersionCreate(BaseModel):
+    created_by: str | None = None
+    change_note: str | None = None
+    steps: list[PlaybookStepCreate] = Field(default_factory=list)
+
+
+# ── Capture (Teach mode) ────────────────────────────────────────────────────
+
+class CaptureCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    user_id: str | None = None
+
+
+class CaptureEventIn(BaseModel):
+    kind: str
+    url: str | None = None
+    selector: str | None = None
+    value: str | None = None
+    text: str | None = None
+    timestamp: str | None = None
+
+
+class CaptureOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
     team_id: str
-    playbook_version_id: str
+    user_id: str | None
+    title: str
+    status: str
+    raw_events: list[dict]
+    playbook_id: str | None
+    started_at: datetime
+    ended_at: datetime | None
+
+
+class CompileOut(BaseModel):
+    playbook_id: str
+    version_id: str
+    steps_count: int
+
+
+# ── Run (batch execution) ───────────────────────────────────────────────────
+
+class RunCreate(BaseModel):
+    playbook_id: str
+    input_rows: list[dict] = Field(default_factory=list)
+    input_source: str | None = None
+
+
+class RunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    team_id: str
+    playbook_id: str
+    playbook_version_id: str | None
     status: str
     trigger_type: str
-    input_source: str
+    input_source: str | None
     total_items: int
     success_count: int
     failed_count: int
     started_at: datetime
     ended_at: datetime | None
-    playbook_name: str | None = None
 
+
+class RunItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    row_index: int
+    input_payload: dict
+    status: str
+    started_at: datetime | None
+    ended_at: datetime | None
+
+
+class RunEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    step_sequence: int
+    step_title: str
+    status: str
+    expected_state: str | None
+    actual_state: str | None
+    screenshot_url: str | None
+    vault_credential_used: str | None
+    created_at: datetime
+
+
+class RunDetailOut(BaseModel):
+    run: RunOut
+    items: list[RunItemOut]
+    events_by_item: dict[str, list[RunEventOut]]
+    playbook_name: str
+
+
+# ── Vault ────────────────────────────────────────────────────────────────────
+
+class VaultCredentialCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    service: str = Field(min_length=1, max_length=120)
+    credential_type: str = 'password'
+    value: str = Field(min_length=1)
+
+
+class VaultCredentialOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    team_id: str
+    name: str
+    service: str
+    credential_type: str
+    masked_value: str
+    created_by: str | None
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+# ── Health ───────────────────────────────────────────────────────────────────
 
 class HealthOut(BaseModel):
     status: str

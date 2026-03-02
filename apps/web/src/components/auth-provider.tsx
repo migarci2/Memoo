@@ -14,7 +14,7 @@ type AuthContextValue = {
   session: SessionData | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (teamSlug: string, email: string) => Promise<void>;
+  login: (teamSlug: string, email: string, password: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -39,10 +39,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (teamSlug: string, email: string) => {
+  const login = useCallback(async (teamSlug: string, email: string, password: string) => {
     const data = await apiPost<SessionData>('/auth/login', {
       team_slug: teamSlug.toLowerCase().trim(),
       email: email.toLowerCase().trim(),
+      password,
     });
     setSession(data);
     setSessionState(data);

@@ -1,195 +1,185 @@
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
+'use client';
+
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import {
+  ArrowLeft,
+  CheckCircle,
+  CircleNotch,
+  Lock,
+  XCircle,
+} from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { apiGet } from '@/lib/api';
-import type { RunDetail } from '@/lib/types';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+import type { RunDetail, RunEvent, RunItem } from '@/lib/types';
 
-type Props = {
-  params: Promise<{ teamId: string; runId: string }>;
+const STATUS_ICON: Record<string, React.ReactNode> = {
+  success: <CheckCircle size={16} weight="fill" className="text-[#4a8c61]" />,
+  failed: <XCircle size={16} weight="fill" className="text-[#b04040]" />,
+  pending: <CircleNotch size={16} className="text-[var(--app-muted)]" />,
+  running: (
+    <span className="animate-spin inline-flex text-[var(--app-blue)]">
+      <CircleNotch size={16} />
+    </span>
+  ),
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: 'status-pill pending',
-  running: 'status-pill running',
-  completed: 'status-pill completed',
-  failed: 'status-pill failed',
-  success: 'status-pill completed',
-};
+export default function RunDetailPage() {
+  const { teamId, runId } = useParams<{ teamId: string; runId: string }>();
+  const router = useRouter();
+  const [detail, setDetail] = useState<RunDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
-const EVENT_STATUS: Record<string, string> = {
-  success: 'text-[var(--app-sage)]',
-  failed: 'text-red-400',
-  error: 'text-red-400',
-  running: 'text-[var(--app-blue)]',
-};
+  useEffect(() => {
+    apiGet<RunDetail>(`/runs/${runId}`)
+      .then(setDetail)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [runId]);
 
-export default async function RunDetailPage({ params }: Props) {
-  const { teamId, runId } = await params;
+  // Poll while running
+  useEffect(() => {
+    if (!detail || detail.run.status !== 'running') return;
+    const timer = setInterval(() => {
+      apiGet<RunDetail>(`/runs/${runId}`).then(setDetail).catch(() => {});
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [detail, runId]);
 
-  let detail: RunDetail;
-  try {
-    detail = await apiGet<RunDetail>(`/runs/${runId}`);
-  } catch {
-    notFound();
+  if (loading) {
+    return (
+      <PlatformShell teamId={teamId}>
+        <div className="py-20 text-center text-[var(--app-muted)]">
+          <span className="animate-spin inline-flex mb-2"><CircleNotch size={24} /></span>
+          <p className="text-sm">Loading run details…</p>
+        </div>
+      </PlatformShell>
+    );
   }
 
-  const { run, items } = detail;
-  const successPct =
-    run.total_items > 0 ? Math.round((run.success_count / run.total_items) * 100) : 0;
+  if (!detail) {
+    return (
+      <PlatformShell teamId={teamId}>
+        <p className="py-20 text-center text-[var(--app-muted)]">Run not found.</p>
+      </PlatformShell>
+    );
+  }
+
+  const { run, items, events_by_item, playbook_name } = detail;
+  const successRate =
+    run.total_items > 0
+      ? Math.round((run.success_count / run.total_items) * 100)
+      : 0;
 
   return (
     <PlatformShell teamId={teamId}>
-      {/* Breadcrumb */}
-      <nav className="mb-6 flex items-center gap-2 text-sm text-[var(--app-muted)]">
-        <Link href={`/team/${teamId}`} className="hover:text-[var(--app-text)]">Dashboard</Link>
-        <span>/</span>
-        <Link href={`/team/${teamId}/runs`} className="hover:text-[var(--app-text)]">Runs</Link>
-        <span>/</span>
-        <span className="font-mono text-[var(--app-text)]">{runId.slice(0, 8)}…</span>
-      </nav>
+      <button
+        onClick={() => router.push(`/team/${teamId}/runs`)}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--app-blue)] hover:underline"
+      >
+        <ArrowLeft size={14} />
+        All runs
+      </button>
 
-      {/* Summary header */}
-      <div className="panel mb-6 p-6 sm:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <span className={STATUS_STYLES[run.status] ?? STATUS_STYLES.pending}>{run.status}</span>
-              <span className="font-mono text-xs text-[var(--app-muted)]">{runId}</span>
-            </div>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Run detail</h1>
-          </div>
-          <Link
-            href={`/team/${teamId}/runs/new?playbookId=${run.playbook_version_id}`}
-            className="btn-secondary rounded-full px-4 py-2 text-sm"
-          >
-            Run again
-          </Link>
-        </div>
-
-        <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-[var(--app-line)] pt-5 sm:grid-cols-4">
-          {[
-            { label: 'Trigger', value: run.trigger_type?.replace('_', ' ') ?? '—' },
-            { label: 'Started', value: run.started_at ? formatRelativeTime(run.started_at) : '—' },
-            { label: 'Ended', value: run.ended_at ? formatDate(run.ended_at) : '—' },
-            { label: 'Total items', value: run.total_items },
-          ].map(m => (
-            <div key={m.label}>
-              <dt className="text-xs uppercase tracking-[0.14em] text-[var(--app-muted)]">{m.label}</dt>
-              <dd className="mt-1 font-semibold capitalize">{String(m.value)}</dd>
-            </div>
-          ))}
-        </dl>
-
-        {/* Progress bar */}
-        {run.total_items > 0 && (
-          <div className="mt-5">
-            <div className="mb-1.5 flex items-center justify-between text-xs text-[var(--app-muted)]">
-              <span>{run.success_count} succeeded · {run.failed_count} failed</span>
-              <span className="font-semibold">{successPct}%</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-[var(--app-chip)]">
-              <div
-                className="h-full rounded-full bg-[var(--app-sage)] transition-all"
-                style={{ width: `${successPct}%` }}
-              />
-            </div>
-          </div>
-        )}
+      <div className="mb-6">
+        <p className="landing-kicker">Run detail</p>
+        <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
+          {playbook_name || 'Run'} #{run.id.slice(0, 8)}
+        </h1>
       </div>
 
-      {/* Items */}
-      <section>
-        <h2 className="mb-4 text-xl font-bold">Items ({items.length})</h2>
-
-        {items.length === 0 ? (
-          <div className="panel-tight px-5 py-8 text-center">
-            <p className="text-[var(--app-muted)]">No items in this run.</p>
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6">
+        {[
+          { label: 'Status', value: run.status, capitalize: true },
+          { label: 'Total items', value: run.total_items },
+          { label: 'Passed', value: run.success_count },
+          { label: 'Success rate', value: `${successRate}%` },
+        ].map(kpi => (
+          <div key={kpi.label} className="panel-tight p-4">
+            <p className="text-xs font-medium text-[var(--app-muted)]">{kpi.label}</p>
+            <p className={`mt-0.5 text-xl font-extrabold ${kpi.capitalize ? 'capitalize' : ''}`}>
+              {kpi.value}
+            </p>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {items.map(item => (
-              <details
-                key={item.id}
-                className="panel group overflow-hidden p-0"
+        ))}
+      </div>
+
+      {/* Items + events */}
+      <div className="space-y-3">
+        {items.map((item: RunItem, idx: number) => {
+          const isExpanded = expandedItem === item.id;
+          const itemEvents: RunEvent[] = events_by_item[item.id] || [];
+
+          return (
+            <div key={item.id} className="panel overflow-hidden">
+              <button
+                onClick={() => setExpandedItem(isExpanded ? null : item.id)}
+                className="flex w-full items-center gap-3 p-4 text-left"
               >
-                {/* Row summary */}
-                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-5 py-4 hover:bg-[var(--app-chip)]/40">
-                  <span className="font-mono text-xs text-[var(--app-muted)]">
-                    #{String(item.row_index + 1).padStart(2, '0')}
-                  </span>
-                  <span className={STATUS_STYLES[item.status] ?? STATUS_STYLES.pending}>
-                    {item.status}
-                  </span>
-                  {Object.entries(item.input_payload ?? {}).slice(0, 3).map(([k, v]) => (
-                    <span key={k} className="text-sm">
-                      <span className="text-[var(--app-muted)]">{k}:</span>{' '}
-                      <span className="font-medium">{String(v)}</span>
-                    </span>
-                  ))}
-                  {item.error_message ? (
-                    <span className="ml-auto text-xs text-red-400">{item.error_message}</span>
-                  ) : null}
-                </summary>
+                {STATUS_ICON[item.status] ?? STATUS_ICON.pending}
+                <span className="font-mono text-xs text-[var(--app-muted)] w-8 shrink-0">
+                  Row {item.row_index + 1}
+                </span>
+                <span className="flex-1 text-sm font-semibold truncate">
+                  {item.input_payload
+                    ? Object.values(item.input_payload).join(' · ')
+                    : `Item ${idx + 1}`}
+                </span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold capitalize ${
+                  item.status === 'success'
+                    ? 'bg-[rgba(123,155,134,0.18)] text-[#335443]'
+                    : item.status === 'failed'
+                    ? 'bg-[rgba(191,100,100,0.18)] text-[#8b3a3a]'
+                    : 'bg-[var(--app-chip)] text-[var(--app-muted)]'
+                }`}>
+                  {item.status}
+                </span>
+              </button>
 
-                {/* Expanded: events + evidence */}
-                <div className="border-t border-[var(--app-line)] px-5 py-4">
-                  {item.events.length > 0 && (
-                    <div className="mb-4">
-                      <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">
-                        Event log
-                      </p>
-                      <ol className="space-y-1.5">
-                        {item.events.map((ev, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm">
-                            <span
-                              className={`mt-0.5 font-mono text-xs font-bold ${
-                                EVENT_STATUS[ev.status] ?? 'text-[var(--app-muted)]'
-                              }`}
-                            >
-                              {ev.status.toUpperCase()}
-                            </span>
-                            <span className="font-medium">{ev.step_title}</span>
-                            {ev.message ? (
-                              <span className="text-[var(--app-muted)]">— {ev.message}</span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-
-                  {item.evidence.length > 0 && (
-                    <div>
-                      <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">
-                        Evidence
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {item.evidence.map((ev, i) => (
-                          <a
-                            key={i}
-                            href={ev.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-lg border border-[var(--app-line)] bg-[var(--app-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--app-blue)] hover:bg-[var(--app-chip)]"
-                          >
-                            {ev.evidence_type} ↗
-                          </a>
-                        ))}
+              {isExpanded && itemEvents.length > 0 && (
+                <div className="border-t border-[var(--app-line)] bg-[var(--app-surface-2)] px-4 py-3">
+                  <p className="mb-2 text-xs font-bold text-[var(--app-muted)] uppercase tracking-wider">
+                    Verification log
+                  </p>
+                  <div className="space-y-2">
+                    {itemEvents.map((ev: RunEvent) => (
+                      <div
+                        key={ev.id}
+                        className="flex items-start gap-3 rounded-lg border border-[var(--app-line)] bg-[var(--app-bg)] px-3 py-2"
+                      >
+                        {STATUS_ICON[ev.status] ?? STATUS_ICON.pending}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold">{ev.step_title}</p>
+                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[var(--app-muted)]">
+                            {ev.expected_state && (
+                              <span>Expected: <span className="font-mono">{ev.expected_state}</span></span>
+                            )}
+                            {ev.actual_state && (
+                              <span>Actual: <span className="font-mono">{ev.actual_state}</span></span>
+                            )}
+                            {ev.vault_credential_used && (
+                              <span className="inline-flex items-center gap-1 text-[var(--app-blue)]">
+                                <Lock size={11} weight="fill" />
+                                Using {ev.vault_credential_used} (secure)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="shrink-0 font-mono text-[11px] text-[var(--app-muted)]">
+                          Step {ev.step_sequence}
+                        </span>
                       </div>
-                    </div>
-                  )}
-
-                  {item.events.length === 0 && item.evidence.length === 0 && (
-                    <p className="text-sm text-[var(--app-muted)]">No events recorded for this item.</p>
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </details>
-            ))}
-          </div>
-        )}
-      </section>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </PlatformShell>
   );
 }

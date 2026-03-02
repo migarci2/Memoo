@@ -11,19 +11,19 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
-  const [form, setForm] = useState({ team_slug: '', email: '' });
+  const [form, setForm] = useState({ team_slug: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
-    if (!form.team_slug.trim() || !form.email.trim()) {
-      setError('Please fill in both fields.');
+    if (!form.team_slug.trim() || !form.email.trim() || !form.password) {
+      setError('Please fill in all fields.');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      await login(form.team_slug, form.email);
+      await login(form.team_slug, form.email, form.password);
       const redirect = searchParams.get('redirect');
       const { getSession } = await import('@/lib/auth');
       const session = getSession();
@@ -71,6 +71,16 @@ function LoginForm() {
                 value={form.email}
                 onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
                 placeholder="name@company.com"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">
+              Password
+              <input
+                className="input"
+                type="password"
+                value={form.password}
+                onChange={e => setForm(prev => ({ ...prev, password: e.target.value }))}
+                placeholder="••••••••"
                 onKeyDown={e => e.key === 'Enter' && submit()}
               />
             </label>

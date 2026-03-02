@@ -2,12 +2,10 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Aperture,
   BookBookmark,
-  Gear,
   House,
-  Lightning,
   List,
+  Lock,
   Play,
   SignIn,
   SignOut,
@@ -62,8 +60,8 @@ function NavLink({
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150',
         active
-          ? 'bg-[var(--app-blue)] text-[var(--app-surface)]'
-          : 'text-[var(--app-muted)] hover:bg-[var(--app-chip)] hover:text-[var(--app-text)]',
+          ? 'bg-[var(--app-blue)] text-white'
+          : 'text-white/80 hover:bg-[var(--app-chip)] hover:text-white',
       )}
     >
       <Icon size={15} weight="bold" />
@@ -82,8 +80,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
         { label: 'Dashboard', href: `/team/${teamId}`, icon: House },
         { label: 'Playbooks', href: `/team/${teamId}/playbooks`, icon: BookBookmark },
         { label: 'Runs', href: `/team/${teamId}/runs`, icon: Play },
-        { label: 'Capture', href: `/team/${teamId}/capture`, icon: Aperture },
-        { label: 'Settings', href: `/team/${teamId}/settings`, icon: Gear },
+        { label: 'Vault', href: `/team/${teamId}/vault`, icon: Lock },
       ]
     : [];
 
@@ -236,28 +233,6 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                   <SignOut size={14} weight="bold" />
                   Sign out
                 </button>
-              ) : null}
-
-              {teamId && isAuthenticated ? (
-                <div className="mt-5 border-t border-[var(--app-line)] pt-5">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-muted)]">
-                    Quick actions
-                  </p>
-                  <Link
-                    href={`/team/${teamId}/capture`}
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-2 rounded-xl bg-[var(--app-chip)] px-3 py-2.5 text-sm font-medium text-[var(--app-blue)]"
-                  >
-                    <Aperture size={14} weight="bold" /> Open capture lab
-                  </Link>
-                  <Link
-                    href={`/team/${teamId}/runs/new`}
-                    onClick={() => setMobileOpen(false)}
-                    className="mt-2 flex items-center gap-2 rounded-xl bg-[var(--app-chip)] px-3 py-2.5 text-sm font-medium text-[var(--app-blue)]"
-                  >
-                    <Lightning size={14} weight="bold" /> New run
-                  </Link>
-                </div>
               ) : null}
             </motion.aside>
           </>

@@ -98,19 +98,12 @@ export default async function PlaybookDetailPage({ params }: Props) {
         <section className="mt-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="landing-kicker">Automation steps</p>
+              <p className="landing-kicker">Steps</p>
               <h2 className="mt-1 text-2xl font-bold tracking-tight">
                 v{latest_version.version_number}{latest_version.change_note ? ` — ${latest_version.change_note}` : ''}
               </h2>
             </div>
-            <div className="flex gap-2">
-              <Link
-                href={`/team/${teamId}/playbooks/new?cloneFrom=${playbookId}`}
-                className="btn-secondary rounded-full px-4 py-2 text-sm"
-              >
-                Clone
-              </Link>
-            </div>
+
           </div>
 
           {latest_version.steps.length === 0 ? (
@@ -180,12 +173,7 @@ export default async function PlaybookDetailPage({ params }: Props) {
       ) : (
         <div className="panel mt-6 px-6 py-10 text-center">
           <p className="text-[var(--app-muted)]">No versions found for this playbook.</p>
-          <Link
-            href={`/team/${teamId}/playbooks/new`}
-            className="btn-primary mt-4 inline-block rounded-full px-4 py-2 text-sm"
-          >
-            Create first version
-          </Link>
+          <p className="mt-2 text-sm text-[var(--app-muted)]">Edit the playbook to add steps.</p>
         </div>
       )}
     </PlatformShell>

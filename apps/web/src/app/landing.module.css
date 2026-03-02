@@ -286,8 +286,11 @@
 }
 
 .logos {
-  padding: 1rem;
   overflow: hidden;
+}
+
+.landing-root main .logos {
+  padding: 1.2rem 1rem;
 }
 
 .logos-note {
@@ -492,8 +495,11 @@
 }
 
 .final-cta {
-  padding: 1.25rem;
   background: linear-gradient(120deg, rgba(123, 155, 134, 0.16), rgba(95, 119, 132, 0.12), rgba(191, 155, 106, 0.13));
+}
+
+.landing-root main .final-cta {
+  padding: 3rem 2.5rem;
 }
 
 .final-cta p {

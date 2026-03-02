@@ -1,245 +1,314 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { CircleNotch, Lightning, Plus, Record, Stop, Trash } from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
+import { useToast } from '@/components/toast-provider';
 import { apiGet, apiPost } from '@/lib/api';
-import { API_BASE_URL, toWsBase } from '@/lib/config';
+import type { CaptureEventInput, CaptureSession, CompileResult } from '@/lib/types';
 
-type Member = {
-  id: string;
-  full_name: string;
-  email: string;
-  role: string;
+const EVENT_KINDS = ['navigate', 'click', 'input', 'submit', 'verify', 'wait'];
+
+const KIND_COLORS: Record<string, string> = {
+  navigate: 'bg-[var(--app-chip)] text-[var(--app-blue)]',
+  click: 'bg-[rgba(123,155,134,0.18)] text-[#335443]',
+  input: 'bg-[rgba(191,155,106,0.16)] text-[#7d5d31]',
+  submit: 'bg-[rgba(95,119,132,0.18)] text-[#3f5e6f]',
+  verify: 'bg-[rgba(123,155,134,0.25)] text-[#335443]',
+  wait: 'bg-[var(--app-chip)] text-[var(--app-muted)]',
 };
 
-type StartSessionResponse = {
-  session_id: string;
-  websocket_url: string;
-};
+export default function CapturePage() {
+  const { teamId } = useParams<{ teamId: string }>();
+  const router = useRouter();
+  const { toast } = useToast();
 
-type PageProps = {
-  params: Promise<{ teamId: string }>;
-};
+  // Capture state
+  const [session, setSession] = useState<CaptureSession | null>(null);
+  const [title, setTitle] = useState('');
+  const [starting, setStarting] = useState(false);
+  const [compiling, setCompiling] = useState(false);
 
-export default function CapturePage({ params }: PageProps) {
-  const [teamId, setTeamId] = useState<string>('');
-  const [members, setMembers] = useState<Member[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessionTitle, setSessionTitle] = useState<string>('New workflow capture');
-  const [status, setStatus] = useState<string>('idle');
-  const [events, setEvents] = useState<Array<Record<string, unknown>>>([]);
-  const [actions, setActions] = useState<Array<Record<string, unknown>>>([]);
-  const [error, setError] = useState<string | null>(null);
+  // Event builder
+  const [events, setEvents] = useState<CaptureEventInput[]>([]);
+  const [newEvent, setNewEvent] = useState<CaptureEventInput>({ kind: 'navigate' });
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Past captures
+  const [captures, setCaptures] = useState<CaptureSession[]>([]);
 
   useEffect(() => {
-    params.then(value => setTeamId(value.teamId));
-  }, [params]);
-
-  useEffect(() => {
-    if (!teamId) return;
-    apiGet<Member[]>(`/teams/${teamId}/members`)
-      .then(data => {
-        setMembers(data);
-        if (data[0]) setSelectedUserId(data[0].id);
-      })
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not load members.'));
+    apiGet<CaptureSession[]>(`/teams/${teamId}/captures`)
+      .then(setCaptures)
+      .catch(() => {});
   }, [teamId]);
 
-  useEffect(() => {
-    return () => {
-      wsRef.current?.close();
-      streamRef.current?.getTracks().forEach(track => track.stop());
-    };
-  }, []);
-
-  const wsOrigin = useMemo(() => {
-    const apiRoot = API_BASE_URL.replace(/\/api\/?$/, '');
-    return toWsBase(apiRoot);
-  }, []);
-
-  async function startScreenShare() {
+  const startCapture = async () => {
+    if (!title.trim()) {
+      toast('Give your capture a title', 'error');
+      return;
+    }
+    setStarting(true);
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      const cap = await apiPost<CaptureSession>(`/teams/${teamId}/captures`, {
+        title: title.trim(),
+      });
+      setSession(cap);
+      toast('Recording started', 'success');
     } catch {
-      setError('Screen share permission denied.');
+      toast('Failed to start capture', 'error');
+    } finally {
+      setStarting(false);
     }
-  }
+  };
 
-  async function startSession() {
-    if (!teamId || !selectedUserId) return;
+  const addEvent = useCallback(async () => {
+    if (!session) return;
+    const ev = { ...newEvent };
+    if (!ev.kind) return;
 
-    setError(null);
-    setStatus('starting');
+    setEvents(prev => [...prev, ev]);
+
     try {
-      const data = await apiPost<StartSessionResponse>('/capture-sessions/start', {
-        team_id: teamId,
-        user_id: selectedUserId,
-        title: sessionTitle,
-      });
-
-      setSessionId(data.session_id);
-      setStatus('active');
-
-      const ws = new WebSocket(`${wsOrigin}${data.websocket_url}`);
-      wsRef.current = ws;
-
-      ws.onmessage = event => {
-        const payload = JSON.parse(event.data) as Record<string, unknown>;
-        if (payload.type === 'normalized-action') {
-          setActions(prev => [...prev, payload]);
-        }
-      };
-
-      ws.onerror = () => {
-        setError('WebSocket connection failed.');
-      };
-    } catch (err) {
-      setStatus('idle');
-      setError(err instanceof Error ? err.message : 'Could not start capture session.');
+      await apiPost<CaptureSession>(`/captures/${session.id}/events`, [ev]);
+    } catch {
+      toast('Failed to save event', 'error');
     }
-  }
 
-  function sendEvent(kind: string) {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    setNewEvent({ kind: 'navigate' });
+  }, [session, newEvent, toast]);
 
-    const payload = {
-      timestamp: new Date().toISOString(),
-      kind,
-      target: kind === 'navigate' ? 'navigation' : '#sample-element',
-      value: kind === 'input' ? 'example input value' : undefined,
-      url: window.location.href,
-      metadata: {
-        source: 'capture-lab',
-      },
-    };
+  const removeEvent = (idx: number) => {
+    setEvents(prev => prev.filter((_, i) => i !== idx));
+  };
 
-    wsRef.current.send(JSON.stringify(payload));
-    setEvents(prev => [...prev, payload]);
-  }
-
-  async function finalizeSession() {
-    if (!sessionId) return;
-    setStatus('finalizing');
+  const finalizeAndCompile = async () => {
+    if (!session) return;
+    setCompiling(true);
     try {
-      await apiPost(`/capture-sessions/${sessionId}/finalize`, {
-        create_playbook: true,
-        playbook_name: sessionTitle,
-        description: 'Playbook generated from Gemini Live capture lab.',
-        created_by: selectedUserId,
-      });
-      wsRef.current?.close();
-      setStatus('finalized');
+      // Finalize
+      await apiPost<CaptureSession>(`/captures/${session.id}/finalize`, {});
+
+      // Compile with Gemini
+      const result = await apiPost<CompileResult>(`/captures/${session.id}/compile`, {});
+
+      toast(`Compiled ${result.steps_count} steps with Gemini`, 'success');
+      router.push(`/team/${teamId}/playbooks/${result.playbook_id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not finalize session.');
+      toast(err instanceof Error ? err.message : 'Compile failed', 'error');
+    } finally {
+      setCompiling(false);
     }
-  }
+  };
+
+  const isRecording = session !== null;
 
   return (
-    <PlatformShell
-      teamId={teamId}
-      title="Gemini Live Capture Lab"
-      subtitle="Capture browser events, stream them to the backend in real time, and normalize them into executable playbook actions."
-    >
-      <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <article className="panel p-5">
-          <h2 className="text-2xl font-bold">Session setup</h2>
+    <PlatformShell teamId={teamId}>
+      <div className="mb-6">
+        <p className="landing-kicker">Teach mode</p>
+        <h1 className="mt-1 text-4xl font-extrabold tracking-tight">Capture a workflow</h1>
+        <p className="mt-2 max-w-[70ch] text-[var(--app-muted)]">
+          Record the steps of a business process. Once captured, Gemini will compile
+          them into a structured, reusable playbook with automatic variable detection.
+        </p>
+      </div>
 
-          <div className="mt-4 grid gap-3">
-            <label className="grid gap-2 text-sm font-medium">
-              Operator
-              <select
-                className="input"
-                value={selectedUserId}
-                onChange={event => setSelectedUserId(event.target.value)}
-              >
-                {members.map(member => (
-                  <option key={member.id} value={member.id}>
-                    {member.full_name} · {member.role}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-2 text-sm font-medium">
-              Session title
+      {!isRecording ? (
+        <>
+          {/* Start new capture */}
+          <div className="panel max-w-2xl p-6">
+            <h2 className="mb-4 text-lg font-bold">Start a new capture</h2>
+            <div className="flex gap-3">
               <input
-                className="input"
-                value={sessionTitle}
-                onChange={event => setSessionTitle(event.target.value)}
+                className="input flex-1"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="e.g. Employee onboarding in Google Admin"
               />
-            </label>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button className="btn-secondary" onClick={startScreenShare} type="button">
-              Share screen
-            </button>
-            <button className="btn-primary" onClick={startSession} type="button" disabled={status !== 'idle'}>
-              {status === 'starting' ? 'Starting...' : 'Start Gemini Live session'}
-            </button>
-            <button className="btn-primary" onClick={finalizeSession} type="button" disabled={!sessionId || status === 'finalized'}>
-              Finalize and create playbook
-            </button>
-          </div>
-
-          {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
-
-          <p className="mt-3 text-sm text-[var(--app-muted)]">
-            Status: <strong>{status}</strong> {sessionId ? `· session ${sessionId.slice(0, 8)}` : ''}
-          </p>
-
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="mt-4 h-[260px] w-full rounded-2xl border border-[var(--app-line)] bg-black/80 object-cover"
-          />
-        </article>
-
-        <article className="panel p-5">
-          <h2 className="text-2xl font-bold">Event stream</h2>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button className="btn-secondary" type="button" onClick={() => sendEvent('navigate')} disabled={!sessionId}>
-              Simulate navigate
-            </button>
-            <button className="btn-secondary" type="button" onClick={() => sendEvent('click')} disabled={!sessionId}>
-              Simulate click
-            </button>
-            <button className="btn-secondary" type="button" onClick={() => sendEvent('input')} disabled={!sessionId}>
-              Simulate input
-            </button>
-            <button className="btn-secondary" type="button" onClick={() => sendEvent('submit')} disabled={!sessionId}>
-              Simulate submit
-            </button>
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <div className="panel-tight p-3">
-              <h3 className="font-bold">Raw events ({events.length})</h3>
-              <pre className="mt-2 max-h-64 overflow-auto text-xs text-[var(--app-muted)]">
-                {JSON.stringify(events.slice(-8), null, 2)}
-              </pre>
-            </div>
-            <div className="panel-tight p-3">
-              <h3 className="font-bold">Normalized actions ({actions.length})</h3>
-              <pre className="mt-2 max-h-64 overflow-auto text-xs text-[var(--app-muted)]">
-                {JSON.stringify(actions.slice(-8), null, 2)}
-              </pre>
+              <button
+                onClick={startCapture}
+                disabled={starting}
+                className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+              >
+                {starting ? (
+                  <span className="animate-spin inline-flex"><CircleNotch size={15} /></span>
+                ) : (
+                  <Record size={15} weight="fill" />
+                )}
+                {starting ? 'Starting…' : 'Start recording'}
+              </button>
             </div>
           </div>
-        </article>
-      </section>
+
+          {/* Past captures */}
+          {captures.length > 0 && (
+            <section className="mt-6">
+              <p className="landing-kicker mb-3">Previous captures</p>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {captures.map(cap => (
+                  <div key={cap.id} className="panel-tight p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-semibold text-sm">{cap.title}</h3>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold capitalize ${
+                        cap.status === 'compiled'
+                          ? 'bg-[rgba(123,155,134,0.18)] text-[#335443]'
+                          : cap.status === 'completed'
+                          ? 'bg-[rgba(191,155,106,0.18)] text-[#7d5d31]'
+                          : 'bg-[rgba(95,119,132,0.18)] text-[#3f5e6f]'
+                      }`}>
+                        {cap.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--app-muted)]">
+                      {cap.raw_events.length} events recorded
+                    </p>
+                    {cap.playbook_id && (
+                      <a
+                        href={`/team/${teamId}/playbooks/${cap.playbook_id}`}
+                        className="mt-2 inline-block text-xs font-semibold text-[var(--app-blue)] hover:underline"
+                      >
+                        View playbook &rarr;
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Recording session */}
+          <div className="panel p-6">
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
+                </span>
+                <h2 className="text-lg font-bold">Recording: {session.title}</h2>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={finalizeAndCompile}
+                  disabled={compiling || events.length === 0}
+                  className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+                >
+                  {compiling ? (
+                    <span className="animate-spin inline-flex"><CircleNotch size={15} /></span>
+                  ) : (
+                    <Lightning size={15} weight="fill" />
+                  )}
+                  {compiling ? 'Compiling with Gemini…' : 'Compile with Gemini'}
+                </button>
+              </div>
+            </div>
+
+            {/* Add event form */}
+            <div className="rounded-xl border border-[var(--app-line)] bg-[var(--app-surface-2)] p-4">
+              <h3 className="mb-3 text-sm font-semibold">Add interaction step</h3>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--app-muted)]">Type</label>
+                  <select
+                    className="input"
+                    value={newEvent.kind}
+                    onChange={e => setNewEvent(prev => ({ ...prev, kind: e.target.value }))}
+                  >
+                    {EVENT_KINDS.map(k => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--app-muted)]">URL</label>
+                  <input
+                    className="input"
+                    value={newEvent.url ?? ''}
+                    onChange={e => setNewEvent(prev => ({ ...prev, url: e.target.value || undefined }))}
+                    placeholder="https://…"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--app-muted)]">Selector</label>
+                  <input
+                    className="input"
+                    value={newEvent.selector ?? ''}
+                    onChange={e => setNewEvent(prev => ({ ...prev, selector: e.target.value || undefined }))}
+                    placeholder="#email-field"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--app-muted)]">Value / Text</label>
+                  <input
+                    className="input"
+                    value={newEvent.value ?? newEvent.text ?? ''}
+                    onChange={e => {
+                      const v = e.target.value || undefined;
+                      setNewEvent(prev =>
+                        prev.kind === 'input'
+                          ? { ...prev, value: v }
+                          : { ...prev, text: v }
+                      );
+                    }}
+                    placeholder="john@company.com"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={addEvent}
+                  className="btn-primary inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold"
+                >
+                  <Plus size={14} weight="bold" />
+                  Add step
+                </button>
+              </div>
+            </div>
+
+            {/* Timeline */}
+            {events.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-semibold text-[var(--app-muted)]">
+                  Captured steps ({events.length})
+                </h3>
+                <div className="space-y-2">
+                  {events.map((ev, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 rounded-xl border border-[var(--app-line)] px-4 py-3"
+                    >
+                      <span className="font-mono text-xs text-[var(--app-muted)] w-6 shrink-0">
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold capitalize ${
+                        KIND_COLORS[ev.kind] ?? KIND_COLORS.wait
+                      }`}>
+                        {ev.kind}
+                      </span>
+                      <span className="flex-1 truncate text-sm">
+                        {ev.url && <span className="text-[var(--app-muted)] font-mono text-xs">{ev.url} </span>}
+                        {ev.selector && <code className="text-xs bg-[var(--app-surface-2)] px-1 rounded">{ev.selector}</code>}
+                        {(ev.value || ev.text) && (
+                          <span className="ml-1 text-[var(--app-muted)]">&rarr; {ev.value || ev.text}</span>
+                        )}
+                      </span>
+                      <button
+                        onClick={() => removeEvent(idx)}
+                        className="shrink-0 text-[var(--app-muted)] hover:text-red-500 transition-colors"
+                      >
+                        <Trash size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </PlatformShell>
   );
 }

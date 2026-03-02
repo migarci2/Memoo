@@ -17,6 +17,7 @@ const STATUS_COLORS = {
 
 export default async function PlaybooksPage({ params }: Props) {
   const { teamId } = await params;
+
   const playbooks = await apiGet<Playbook[]>(`/teams/${teamId}/playbooks`);
 
   const active = playbooks.filter(p => p.status === 'active');
@@ -27,13 +28,13 @@ export default async function PlaybooksPage({ params }: Props) {
     <PlatformShell
       teamId={teamId}
       title="Playbooks"
-      subtitle="All reusable automation workflows for this workspace."
+      subtitle="Automated workflows — teach once, run anywhere."
     >
       {/* KPI Strip */}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Total', value: playbooks.length, desc: 'Playbooks in this workspace' },
-          { label: 'Active', value: active.length, desc: 'Running in production' },
+          { label: 'Active', value: active.length, desc: 'Ready to run' },
           { label: 'Draft', value: draft.length, desc: 'Under development' },
           { label: 'Archived', value: archived.length, desc: 'No longer in use' },
         ].map(kpi => (
@@ -48,12 +49,20 @@ export default async function PlaybooksPage({ params }: Props) {
       {/* Header actions */}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <p className="landing-kicker">All playbooks</p>
-        <Link
-          href={`/team/${teamId}/playbooks/new`}
-          className="btn-primary rounded-full px-4 py-2 text-sm"
-        >
-          + New playbook
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href={`/team/${teamId}/capture`}
+            className="btn-secondary rounded-full border border-[var(--app-line)] px-4 py-2 text-sm font-semibold"
+          >
+            Teach new
+          </Link>
+          <Link
+            href={`/team/${teamId}/playbooks/new`}
+            className="btn-primary rounded-full px-4 py-2 text-sm"
+          >
+            + Manual
+          </Link>
+        </div>
       </div>
 
       {/* Playbook grid */}
@@ -66,16 +75,11 @@ export default async function PlaybooksPage({ params }: Props) {
           </div>
           <p className="text-xl font-bold tracking-tight">No playbooks yet</p>
           <p className="max-w-[40ch] text-[var(--app-muted)]">
-            Start by recording a workflow in the Capture Lab, or create a playbook manually.
+            Teach a workflow or create a playbook manually to start automating.
           </p>
-          <div className="flex gap-3">
-            <Link href={`/team/${teamId}/capture`} className="btn-secondary rounded-full px-4 py-2 text-sm">
-              Open capture lab
-            </Link>
-            <Link href={`/team/${teamId}/playbooks/new`} className="btn-primary rounded-full px-4 py-2 text-sm">
-              Create manually
-            </Link>
-          </div>
+          <Link href={`/team/${teamId}/capture`} className="btn-primary rounded-full px-4 py-2 text-sm">
+            Teach a workflow
+          </Link>
         </div>
       ) : (
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">

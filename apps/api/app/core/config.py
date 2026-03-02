@@ -14,9 +14,6 @@ class Settings(BaseSettings):
     database_url: str = 'postgresql+asyncpg://memoo:memoo@localhost:5432/memoo'
     cors_origins: str = 'http://localhost:3000'
 
-    google_api_key: str | None = None
-    gemini_live_model: str = 'gemini-2.0-flash-live-001'
-
     # MinIO / S3-compatible blob storage
     minio_endpoint: str = 'localhost:9000'
     minio_access_key: str = 'memoo'
@@ -24,6 +21,10 @@ class Settings(BaseSettings):
     minio_bucket: str = 'memoo-evidence'
     minio_use_ssl: bool = False
     minio_public_url: str = 'http://localhost:9000'
+
+    # Gemini
+    google_api_key: str = ''
+    gemini_model: str = 'gemini-2.5-flash'
 
 
 @lru_cache

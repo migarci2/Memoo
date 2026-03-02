@@ -3,14 +3,13 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
 from sqlalchemy import delete, select
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.entities import (
-    CaptureSession,
-    CaptureStatus,
-    Evidence,
+    Department,
     Invite,
     Membership,
     MembershipRole,
@@ -19,13 +18,13 @@ from app.models.entities import (
     PlaybookStatus,
     PlaybookStep,
     PlaybookVersion,
-    Run,
-    RunEvent,
-    RunItem,
-    RunStatus,
     Team,
     User,
 )
+
+
+def _hash(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 
 
 async def reset_schema() -> None:
@@ -38,26 +37,52 @@ async def seed() -> None:
     await reset_schema()
 
     now = datetime.now(UTC)
+    demo_pw = _hash('demo1234')
 
     async with SessionLocal() as db:
         team = Team(name='Northline Operations', slug='northline-ops', domain='northline.io', plan='scale')
         db.add(team)
         await db.flush()
 
-        owner = User(email='amaya@northline.io', full_name='Amaya Voss', job_title='Head of Operations')
-        finance = User(email='marco@northline.io', full_name='Marco Ilan', job_title='Finance Ops Lead')
-        support = User(email='nina@northline.io', full_name='Nina Calder', job_title='Support Supervisor')
-        db.add_all([owner, finance, support])
+        # ── Departments ──────────────────────────────────────────────────
+        dept_eng = Department(team_id=team.id, name='Engineering', color='#5f7784')
+        dept_finance = Department(team_id=team.id, name='Finance', color='#bf9b6a')
+        dept_support = Department(team_id=team.id, name='Support', color='#7b9b86')
+        db.add_all([dept_eng, dept_finance, dept_support])
         await db.flush()
 
+        # ── Users ────────────────────────────────────────────────────────
+        owner = User(
+            email='amaya@northline.io',
+            full_name='Amaya Voss',
+            job_title='Head of Operations',
+            password_hash=demo_pw,
+        )
+        finance_user = User(
+            email='marco@northline.io',
+            full_name='Marco Ilan',
+            job_title='Finance Ops Lead',
+            password_hash=demo_pw,
+        )
+        support_user = User(
+            email='nina@northline.io',
+            full_name='Nina Calder',
+            job_title='Support Supervisor',
+            password_hash=demo_pw,
+        )
+        db.add_all([owner, finance_user, support_user])
+        await db.flush()
+
+        # ── Memberships ─────────────────────────────────────────────────
         db.add_all(
             [
-                Membership(team_id=team.id, user_id=owner.id, role=MembershipRole.OWNER),
-                Membership(team_id=team.id, user_id=finance.id, role=MembershipRole.ADMIN),
-                Membership(team_id=team.id, user_id=support.id, role=MembershipRole.MEMBER),
+                Membership(team_id=team.id, user_id=owner.id, role=MembershipRole.OWNER, department_id=dept_eng.id),
+                Membership(team_id=team.id, user_id=finance_user.id, role=MembershipRole.ADMIN, department_id=dept_finance.id),
+                Membership(team_id=team.id, user_id=support_user.id, role=MembershipRole.MEMBER, department_id=dept_support.id),
             ]
         )
 
+        # ── Onboarding ──────────────────────────────────────────────────
         db.add(
             OnboardingProgress(
                 team_id=team.id,
@@ -67,6 +92,7 @@ async def seed() -> None:
             )
         )
 
+        # ── Invites ──────────────────────────────────────────────────────
         db.add_all(
             [
                 Invite(
@@ -88,203 +114,141 @@ async def seed() -> None:
             ]
         )
 
+        # ── Playbooks ───────────────────────────────────────────────────
         playbook_hr = Playbook(
             team_id=team.id,
             created_by=owner.id,
-            name='Employee onboarding in HRIS',
-            description='Create new employee profile, assign benefits package, and verify account provisioning.',
+            name='Employee onboarding checklist',
+            description='Step-by-step guide for onboarding new hires: profile setup, benefits enrollment, and access provisioning.',
             status=PlaybookStatus.ACTIVE,
             tags=['hr', 'onboarding', 'hiring'],
+            department_id=dept_eng.id,
         )
         playbook_finance = Playbook(
             team_id=team.id,
-            created_by=finance.id,
-            name='Invoice reconciliation workflow',
-            description='Validate invoice fields, match ledger entries, submit reconciliation evidence.',
+            created_by=finance_user.id,
+            name='Invoice reconciliation process',
+            description='Validate invoice fields, match ledger entries, and document reconciliation steps.',
             status=PlaybookStatus.ACTIVE,
             tags=['finance', 'billing', 'reconciliation'],
+            department_id=dept_finance.id,
         )
         playbook_support = Playbook(
             team_id=team.id,
-            created_by=support.id,
-            name='Tier-1 ticket follow-up',
-            description='Apply reply template, update CRM timeline, and schedule follow-up callback.',
+            created_by=support_user.id,
+            name='Tier-1 ticket follow-up guide',
+            description='Standard procedure for handling first-response tickets: templates, CRM updates, and follow-up scheduling.',
             status=PlaybookStatus.DRAFT,
             tags=['support', 'tickets'],
+            department_id=dept_support.id,
         )
         db.add_all([playbook_hr, playbook_finance, playbook_support])
         await db.flush()
 
+        # ── Playbook versions ────────────────────────────────────────────
         hr_v1 = PlaybookVersion(
             playbook_id=playbook_hr.id,
             version_number=1,
             created_by=owner.id,
-            change_note='Initial production version',
-            graph={'source': 'gemini-live-capture', 'confidence': 0.92},
+            change_note='Initial version',
+            graph={},
             created_at=now - timedelta(days=8),
         )
         fin_v1 = PlaybookVersion(
             playbook_id=playbook_finance.id,
             version_number=1,
-            created_by=finance.id,
-            change_note='Initial production version',
-            graph={'source': 'gemini-live-capture', 'confidence': 0.9},
+            created_by=finance_user.id,
+            change_note='Initial version',
+            graph={},
             created_at=now - timedelta(days=5),
         )
         sup_v1 = PlaybookVersion(
             playbook_id=playbook_support.id,
             version_number=1,
-            created_by=support.id,
-            change_note='Draft from capture',
-            graph={'source': 'gemini-live-capture', 'confidence': 0.78},
+            created_by=support_user.id,
+            change_note='Draft version',
+            graph={},
             created_at=now - timedelta(days=2),
         )
         db.add_all([hr_v1, fin_v1, sup_v1])
         await db.flush()
 
+        # ── Playbook steps ───────────────────────────────────────────────
         db.add_all(
             [
                 PlaybookStep(
                     playbook_version_id=hr_v1.id,
                     sequence=1,
-                    title='Open HRIS employee profile form',
+                    title='Open HRIS and navigate to new employee form',
                     step_type='navigate',
                     target_url='https://hris.internal/profiles/new',
-                    selector='a[href="/profiles/new"]',
+                    selector='',
                     variables={},
-                    guardrails={'verify': 'new_profile_page_loaded'},
+                    guardrails={},
                 ),
                 PlaybookStep(
                     playbook_version_id=hr_v1.id,
                     sequence=2,
-                    title='Fill employee identity fields',
+                    title='Fill in employee personal details',
                     step_type='input',
-                    selector='form#employee-profile',
-                    variables={'first_name': '{{first_name}}', 'last_name': '{{last_name}}', 'email': '{{email}}'},
-                    guardrails={'required': ['first_name', 'last_name', 'email']},
+                    selector='',
+                    variables={},
+                    guardrails={},
                 ),
                 PlaybookStep(
                     playbook_version_id=hr_v1.id,
                     sequence=3,
-                    title='Submit profile and verify success banner',
+                    title='Submit profile and confirm success',
                     step_type='submit',
-                    selector='button[type="submit"]',
+                    selector='',
                     variables={},
-                    guardrails={'expect_text': 'Employee profile created'},
+                    guardrails={},
                 ),
                 PlaybookStep(
                     playbook_version_id=fin_v1.id,
                     sequence=1,
                     title='Open invoice in vendor portal',
                     step_type='navigate',
-                    target_url='https://vendors.example.com/invoices/{{invoice_id}}',
-                    selector='table#invoices a.invoice-link',
-                    variables={'invoice_id': '{{invoice_id}}'},
-                    guardrails={'verify': 'invoice_detail_opened'},
+                    target_url='https://vendors.example.com/invoices',
+                    selector='',
+                    variables={},
+                    guardrails={},
                 ),
                 PlaybookStep(
                     playbook_version_id=fin_v1.id,
                     sequence=2,
-                    title='Compare amount and PO number',
-                    step_type='validate',
-                    selector='.invoice-summary',
-                    variables={'amount': '{{amount}}', 'po_number': '{{po_number}}'},
-                    guardrails={'match': ['amount', 'po_number']},
+                    title='Compare amount and PO number with ledger',
+                    step_type='action',
+                    selector='',
+                    variables={},
+                    guardrails={},
                 ),
                 PlaybookStep(
                     playbook_version_id=fin_v1.id,
                     sequence=3,
-                    title='Mark reconciled and attach evidence',
+                    title='Mark as reconciled and attach documentation',
                     step_type='action',
-                    selector='button#mark-reconciled',
+                    selector='',
                     variables={},
-                    guardrails={'expect_text': 'Reconciled'},
+                    guardrails={},
                 ),
                 PlaybookStep(
                     playbook_version_id=sup_v1.id,
                     sequence=1,
-                    title='Open ticket and review context',
+                    title='Open support ticket and review context',
                     step_type='navigate',
-                    target_url='https://support.example.com/tickets/{{ticket_id}}',
-                    selector='a.ticket-link',
-                    variables={'ticket_id': '{{ticket_id}}'},
-                    guardrails={'verify': 'ticket_opened'},
+                    target_url='https://support.example.com/tickets',
+                    selector='',
+                    variables={},
+                    guardrails={},
                 ),
             ]
         )
 
-        capture = CaptureSession(
-            team_id=team.id,
-            user_id=owner.id,
-            title='HRIS onboarding capture',
-            provider='gemini-live',
-            status=CaptureStatus.FINALIZED,
-            raw_events=[
-                {'kind': 'navigate', 'target': 'new profile', 'url': 'https://hris.internal/profiles/new'},
-                {'kind': 'input', 'target': 'first_name', 'value': 'Sofia'},
-                {'kind': 'input', 'target': 'email', 'value': 'sofia@northline.io'},
-                {'kind': 'submit', 'target': 'employee_profile_form'},
-            ],
-            derived_actions=[
-                {'title': 'Navigate to new profile form', 'step_type': 'navigate'},
-                {'title': 'Fill identity data', 'step_type': 'input'},
-                {'title': 'Submit and verify banner', 'step_type': 'submit'},
-            ],
-            started_at=now - timedelta(days=9),
-            ended_at=now - timedelta(days=9, minutes=-12),
-        )
-        db.add(capture)
-
-        run = Run(
-            team_id=team.id,
-            playbook_version_id=hr_v1.id,
-            status=RunStatus.COMPLETED,
-            trigger_type='csv_batch',
-            input_source='new_hires_week_08.csv',
-            total_items=6,
-            success_count=6,
-            failed_count=0,
-            started_at=now - timedelta(days=1, hours=2),
-            ended_at=now - timedelta(days=1, hours=1, minutes=40),
-        )
-        db.add(run)
-        await db.flush()
-
-        for idx in range(6):
-            item = RunItem(
-                run_id=run.id,
-                row_index=idx,
-                input_payload={
-                    'first_name': f'Employee{idx + 1}',
-                    'last_name': 'Northline',
-                    'email': f'employee{idx + 1}@northline.io',
-                },
-                status='completed',
-            )
-            db.add(item)
-            await db.flush()
-
-            db.add(
-                RunEvent(
-                    run_item_id=item.id,
-                    step_title='Submit profile and verify success banner',
-                    status='success',
-                    message='Employee profile created and verified.',
-                    screenshot_url=f'https://picsum.photos/seed/hris-run-{idx}/1200/700',
-                )
-            )
-            db.add(
-                Evidence(
-                    run_item_id=item.id,
-                    evidence_type='screenshot',
-                    url=f'https://picsum.photos/seed/hris-evidence-{idx}/1200/700',
-                    metadata_json={'category': 'profile_created', 'row_index': idx},
-                )
-            )
-
         await db.commit()
 
     print('Seed complete: Northline Operations demo team created.')
+    print('Login: amaya@northline.io / demo1234')
 
 
 if __name__ == '__main__':

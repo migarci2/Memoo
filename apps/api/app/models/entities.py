@@ -14,6 +14,8 @@ def now_utc() -> datetime:
     return datetime.now(UTC)
 
 
+# ── Enums ────────────────────────────────────────────────────────────────────
+
 class MembershipRole(StrEnum):
     OWNER = 'owner'
     ADMIN = 'admin'
@@ -27,10 +29,9 @@ class PlaybookStatus(StrEnum):
 
 
 class CaptureStatus(StrEnum):
-    ACTIVE = 'active'
-    PROCESSING = 'processing'
-    FINALIZED = 'finalized'
-    FAILED = 'failed'
+    RECORDING = 'recording'
+    COMPLETED = 'completed'
+    COMPILED = 'compiled'
 
 
 class RunStatus(StrEnum):
@@ -39,6 +40,8 @@ class RunStatus(StrEnum):
     COMPLETED = 'completed'
     FAILED = 'failed'
 
+
+# ── Core entities ────────────────────────────────────────────────────────────
 
 class Team(Base):
     __tablename__ = 'teams'
@@ -58,6 +61,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
     job_title: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
@@ -95,20 +99,7 @@ class Invite(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
-class CaptureSession(Base):
-    __tablename__ = 'capture_sessions'
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    team_id: Mapped[str] = mapped_column(ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
-    user_id: Mapped[str] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    title: Mapped[str] = mapped_column(String(220), default='Untitled Capture Session')
-    provider: Mapped[str] = mapped_column(String(40), default='gemini-live')
-    status: Mapped[CaptureStatus] = mapped_column(Enum(CaptureStatus), default=CaptureStatus.ACTIVE)
-    raw_events: Mapped[list[dict]] = mapped_column(JSON, default=list)
-    derived_actions: Mapped[list[dict]] = mapped_column(JSON, default=list)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
+# ── Playbooks ────────────────────────────────────────────────────────────────
 
 class Playbook(Base):
     __tablename__ = 'playbooks'
@@ -158,51 +149,86 @@ class PlaybookStep(Base):
     version: Mapped[PlaybookVersion] = relationship(back_populates='steps')
 
 
+# ── Capture sessions (Teach mode) ───────────────────────────────────────────
+
+class CaptureSession(Base):
+    __tablename__ = 'capture_sessions'
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    team_id: Mapped[str] = mapped_column(ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[CaptureStatus] = mapped_column(Enum(CaptureStatus), default=CaptureStatus.RECORDING)
+    raw_events: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    playbook_id: Mapped[str | None] = mapped_column(ForeignKey('playbooks.id', ondelete='SET NULL'), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ── Runs (batch execution) ──────────────────────────────────────────────────
+
 class Run(Base):
     __tablename__ = 'runs'
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     team_id: Mapped[str] = mapped_column(ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
-    playbook_version_id: Mapped[str] = mapped_column(ForeignKey('playbook_versions.id', ondelete='CASCADE'))
+    playbook_id: Mapped[str] = mapped_column(ForeignKey('playbooks.id', ondelete='CASCADE'), nullable=False)
+    playbook_version_id: Mapped[str | None] = mapped_column(ForeignKey('playbook_versions.id', ondelete='SET NULL'), nullable=True)
     status: Mapped[RunStatus] = mapped_column(Enum(RunStatus), default=RunStatus.PENDING)
-    trigger_type: Mapped[str] = mapped_column(String(60), default='manual')
-    input_source: Mapped[str] = mapped_column(String(120), default='list')
+    trigger_type: Mapped[str] = mapped_column(String(30), default='csv_batch')
+    input_source: Mapped[str | None] = mapped_column(String(200), nullable=True)
     total_items: Mapped[int] = mapped_column(Integer, default=0)
     success_count: Mapped[int] = mapped_column(Integer, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, default=0)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    items: Mapped[list['RunItem']] = relationship(back_populates='run', cascade='all, delete-orphan')
+
 
 class RunItem(Base):
     __tablename__ = 'run_items'
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    run_id: Mapped[str] = mapped_column(ForeignKey('runs.id', ondelete='CASCADE'))
+    run_id: Mapped[str] = mapped_column(ForeignKey('runs.id', ondelete='CASCADE'), nullable=False)
     row_index: Mapped[int] = mapped_column(Integer, default=0)
     input_payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    status: Mapped[str] = mapped_column(String(30), default='pending')
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[RunStatus] = mapped_column(Enum(RunStatus), default=RunStatus.PENDING)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    run: Mapped[Run] = relationship(back_populates='items')
+    events: Mapped[list['RunEvent']] = relationship(back_populates='item', cascade='all, delete-orphan')
 
 
 class RunEvent(Base):
     __tablename__ = 'run_events'
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    run_item_id: Mapped[str] = mapped_column(ForeignKey('run_items.id', ondelete='CASCADE'))
+    run_item_id: Mapped[str] = mapped_column(ForeignKey('run_items.id', ondelete='CASCADE'), nullable=False)
+    step_sequence: Mapped[int] = mapped_column(Integer, default=0)
     step_title: Mapped[str] = mapped_column(String(220), nullable=False)
-    status: Mapped[str] = mapped_column(String(30), default='info')
-    message: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default='pending')
+    expected_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    actual_state: Mapped[str | None] = mapped_column(Text, nullable=True)
     screenshot_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    vault_credential_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
+    item: Mapped[RunItem] = relationship(back_populates='events')
 
-class Evidence(Base):
-    __tablename__ = 'evidence'
+
+# ── Vault ────────────────────────────────────────────────────────────────────
+
+class VaultCredential(Base):
+    __tablename__ = 'vault_credentials'
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    run_item_id: Mapped[str] = mapped_column(ForeignKey('run_items.id', ondelete='CASCADE'))
-    evidence_type: Mapped[str] = mapped_column(String(50), default='screenshot')
-    url: Mapped[str] = mapped_column(String(500), nullable=False)
-    metadata_json: Mapped[dict] = mapped_column('metadata', JSON, default=dict)
+    team_id: Mapped[str] = mapped_column(ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    service: Mapped[str] = mapped_column(String(120), nullable=False)
+    credential_type: Mapped[str] = mapped_column(String(40), default='password')
+    masked_value: Mapped[str] = mapped_column(String(200), default='••••••••')
+    created_by: Mapped[str | None] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

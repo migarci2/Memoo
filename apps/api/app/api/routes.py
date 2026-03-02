@@ -1,19 +1,20 @@
 from __future__ import annotations
 
+import asyncio
+import random
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+import bcrypt
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.config import get_settings
-from app.db.session import SessionLocal, get_db
+from app.db.session import get_db
 from app.models.entities import (
     CaptureSession,
     CaptureStatus,
-    Evidence,
     Invite,
     Membership,
     MembershipRole,
@@ -28,58 +29,59 @@ from app.models.entities import (
     RunStatus,
     Team,
     User,
+    VaultCredential,
 )
 from app.schemas.entities import (
     AuthLoginIn,
     AuthLoginOut,
+    CaptureCreate,
     CaptureEventIn,
-    CaptureFinalizeIn,
-    CaptureSessionStart,
-    DashboardMetrics,
+    CaptureOut,
+    CompileOut,
     HealthOut,
     PlaybookCreate,
     PlaybookOut,
     PlaybookUpdate,
     PlaybookVersionCreate,
     RunCreate,
+    RunDetailOut,
+    RunEventOut,
+    RunItemOut,
     RunOut,
-    RunSummary,
     TeamBootstrapResponse,
     TeamOnboardingCreate,
+    TeamOverview,
     TeamSummary,
     UserSummary,
+    VaultCredentialCreate,
+    VaultCredentialOut,
 )
-from app.services.gemini_live import GeminiLiveCaptureService
-from app.services.storage import public_url, upload_blob
 
 router = APIRouter()
-settings = get_settings()
-live_service = GeminiLiveCaptureService(model_name=settings.gemini_live_model)
 
 
-@router.post('/upload')
-async def upload_file(file: UploadFile = File(...)) -> dict:
-    """Upload a file to MinIO blob storage, return the object key and public URL."""
-    data = await file.read()
-    object_key = await upload_blob(
-        data,
-        filename=file.filename,
-        content_type=file.content_type or 'application/octet-stream',
-        folder='evidence',
-    )
-    return {'object_key': object_key, 'url': public_url(object_key)}
+def _hash_password(plain: str) -> str:
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
+
+def _check_password(plain: str, hashed: str) -> bool:
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
+
+
+# ── Health ───────────────────────────────────────────────────────────────────
 
 @router.get('/health', response_model=HealthOut)
 async def health() -> HealthOut:
     return HealthOut(status='ok', app='memoo-api')
 
 
+# ── Auth ─────────────────────────────────────────────────────────────────────
+
 @router.post('/auth/login', response_model=AuthLoginOut)
 async def auth_login(payload: AuthLoginIn, db: AsyncSession = Depends(get_db)) -> AuthLoginOut:
     team = await db.scalar(select(Team).where(Team.slug == payload.team_slug.lower()))
     if not team:
-        raise HTTPException(status_code=401, detail='Invalid team slug or email.')
+        raise HTTPException(status_code=401, detail='Invalid credentials.')
 
     row = await db.execute(
         select(User, Membership.role)
@@ -88,9 +90,13 @@ async def auth_login(payload: AuthLoginIn, db: AsyncSession = Depends(get_db)) -
     )
     found = row.first()
     if not found:
-        raise HTTPException(status_code=401, detail='Invalid team slug or email.')
+        raise HTTPException(status_code=401, detail='Invalid credentials.')
 
     user, role = found
+
+    if not user.password_hash or not _check_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail='Invalid credentials.')
+
     return AuthLoginOut(
         team_id=team.id,
         team_slug=team.slug,
@@ -102,7 +108,9 @@ async def auth_login(payload: AuthLoginIn, db: AsyncSession = Depends(get_db)) -
 
 
 @router.post('/onboarding/team', response_model=TeamBootstrapResponse)
-async def create_team_onboarding(payload: TeamOnboardingCreate, db: AsyncSession = Depends(get_db)) -> TeamBootstrapResponse:
+async def create_team_onboarding(
+    payload: TeamOnboardingCreate, db: AsyncSession = Depends(get_db)
+) -> TeamBootstrapResponse:
     normalized_slug = payload.team_slug.lower()
     existing_slug = await db.scalar(select(Team).where(Team.slug == normalized_slug))
     if existing_slug:
@@ -110,9 +118,17 @@ async def create_team_onboarding(payload: TeamOnboardingCreate, db: AsyncSession
 
     user = await db.scalar(select(User).where(User.email == payload.owner_email.lower()))
     if not user:
-        user = User(email=payload.owner_email.lower(), full_name=payload.owner_name, job_title=payload.owner_title)
+        user = User(
+            email=payload.owner_email.lower(),
+            full_name=payload.owner_name,
+            job_title=payload.owner_title,
+            password_hash=_hash_password(payload.password),
+        )
         db.add(user)
         await db.flush()
+    else:
+        if not user.password_hash:
+            user.password_hash = _hash_password(payload.password)
 
     team = Team(name=payload.team_name, slug=normalized_slug, domain=payload.team_domain)
     db.add(team)
@@ -124,7 +140,7 @@ async def create_team_onboarding(payload: TeamOnboardingCreate, db: AsyncSession
     progress = OnboardingProgress(
         team_id=team.id,
         owner_user_id=user.id,
-        current_step='create_first_playbook',
+        current_step='invite_team',
         completed_steps=['workspace_created'],
     )
     db.add(progress)
@@ -136,45 +152,53 @@ async def create_team_onboarding(payload: TeamOnboardingCreate, db: AsyncSession
     return TeamBootstrapResponse(
         team=TeamSummary.model_validate(team),
         owner=UserSummary.model_validate(user),
-        next_step='Create your first playbook from a Gemini Live capture session.',
+        next_step='Create your first playbook and start automating.',
     )
 
 
-@router.get('/teams/{team_id}/dashboard', response_model=DashboardMetrics)
-async def get_dashboard_metrics(team_id: str, db: AsyncSession = Depends(get_db)) -> DashboardMetrics:
+# ── Dashboard ────────────────────────────────────────────────────────────────
+
+@router.get('/teams/{team_id}/dashboard', response_model=TeamOverview)
+async def get_dashboard(team_id: str, db: AsyncSession = Depends(get_db)) -> TeamOverview:
     team = await db.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail='Team not found.')
 
+    members_count = await db.scalar(
+        select(func.count()).select_from(Membership).where(Membership.team_id == team_id)
+    ) or 0
+    playbooks_count = await db.scalar(
+        select(func.count()).select_from(Playbook).where(Playbook.team_id == team_id)
+    ) or 0
     active_playbooks = await db.scalar(
-        select(func.count()).select_from(Playbook).where(Playbook.team_id == team_id, Playbook.status == PlaybookStatus.ACTIVE)
-    )
-    draft_playbooks = await db.scalar(
-        select(func.count()).select_from(Playbook).where(Playbook.team_id == team_id, Playbook.status == PlaybookStatus.DRAFT)
-    )
+        select(func.count())
+        .select_from(Playbook)
+        .where(Playbook.team_id == team_id, Playbook.status == PlaybookStatus.ACTIVE)
+    ) or 0
+    total_runs = await db.scalar(
+        select(func.count()).select_from(Run).where(Run.team_id == team_id)
+    ) or 0
+    successful_runs = await db.scalar(
+        select(func.count())
+        .select_from(Run)
+        .where(Run.team_id == team_id, Run.status == RunStatus.COMPLETED)
+    ) or 0
+    vault_count = await db.scalar(
+        select(func.count()).select_from(VaultCredential).where(VaultCredential.team_id == team_id)
+    ) or 0
 
-    since = datetime.now(UTC) - timedelta(days=7)
-    runs_last_7 = await db.scalar(
-        select(func.count()).select_from(Run).where(Run.team_id == team_id, Run.started_at >= since)
-    )
-
-    completed = await db.scalar(
-        select(func.count()).select_from(Run).where(Run.team_id == team_id, Run.status == RunStatus.COMPLETED)
-    )
-    failed = await db.scalar(
-        select(func.count()).select_from(Run).where(Run.team_id == team_id, Run.status == RunStatus.FAILED)
-    )
-    total = (completed or 0) + (failed or 0)
-    success_rate = ((completed or 0) / total * 100.0) if total > 0 else 100.0
-
-    return DashboardMetrics(
+    return TeamOverview(
         team_id=team_id,
-        active_playbooks=active_playbooks or 0,
-        draft_playbooks=draft_playbooks or 0,
-        runs_last_7_days=runs_last_7 or 0,
-        success_rate=round(success_rate, 2),
+        members_count=members_count,
+        playbooks_count=playbooks_count,
+        active_playbooks=active_playbooks,
+        total_runs=total_runs,
+        successful_runs=successful_runs,
+        vault_credentials=vault_count,
     )
 
+
+# ── Members ──────────────────────────────────────────────────────────────────
 
 @router.get('/teams/{team_id}/members')
 async def list_team_members(team_id: str, db: AsyncSession = Depends(get_db)) -> list[dict]:
@@ -201,14 +225,20 @@ async def list_team_members(team_id: str, db: AsyncSession = Depends(get_db)) ->
     ]
 
 
+# ── Playbooks ────────────────────────────────────────────────────────────────
+
 @router.get('/teams/{team_id}/playbooks', response_model=list[PlaybookOut])
 async def list_playbooks(team_id: str, db: AsyncSession = Depends(get_db)) -> list[PlaybookOut]:
-    records = await db.scalars(select(Playbook).where(Playbook.team_id == team_id).order_by(desc(Playbook.updated_at)))
-    return [PlaybookOut.model_validate(playbook, from_attributes=True) for playbook in records]
+    records = await db.scalars(
+        select(Playbook).where(Playbook.team_id == team_id).order_by(desc(Playbook.updated_at))
+    )
+    return [PlaybookOut.model_validate(p, from_attributes=True) for p in records]
 
 
 @router.post('/teams/{team_id}/playbooks', response_model=PlaybookOut)
-async def create_playbook(team_id: str, payload: PlaybookCreate, db: AsyncSession = Depends(get_db)) -> PlaybookOut:
+async def create_playbook(
+    team_id: str, payload: PlaybookCreate, db: AsyncSession = Depends(get_db)
+) -> PlaybookOut:
     team = await db.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail='Team not found.')
@@ -295,14 +325,54 @@ async def get_playbook(playbook_id: str, db: AsyncSession = Depends(get_db)) -> 
     }
 
 
+@router.patch('/playbooks/{playbook_id}', response_model=PlaybookOut)
+async def update_playbook(
+    playbook_id: str, payload: PlaybookUpdate, db: AsyncSession = Depends(get_db)
+) -> PlaybookOut:
+    playbook = await db.get(Playbook, playbook_id)
+    if not playbook:
+        raise HTTPException(status_code=404, detail='Playbook not found.')
+
+    if payload.name is not None:
+        playbook.name = payload.name
+    if payload.description is not None:
+        playbook.description = payload.description
+    if payload.status is not None:
+        try:
+            playbook.status = PlaybookStatus(payload.status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f'Invalid status: {payload.status}')
+    if payload.tags is not None:
+        playbook.tags = payload.tags
+
+    playbook.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(playbook)
+    return PlaybookOut.model_validate(playbook, from_attributes=True)
+
+
+@router.delete('/playbooks/{playbook_id}')
+async def delete_playbook(playbook_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    playbook = await db.get(Playbook, playbook_id)
+    if not playbook:
+        raise HTTPException(status_code=404, detail='Playbook not found.')
+    await db.delete(playbook)
+    await db.commit()
+    return {'deleted': True}
+
+
 @router.post('/playbooks/{playbook_id}/versions')
-async def create_playbook_version(playbook_id: str, payload: PlaybookVersionCreate, db: AsyncSession = Depends(get_db)) -> dict:
+async def create_playbook_version(
+    playbook_id: str, payload: PlaybookVersionCreate, db: AsyncSession = Depends(get_db)
+) -> dict:
     playbook = await db.get(Playbook, playbook_id)
     if not playbook:
         raise HTTPException(status_code=404, detail='Playbook not found.')
 
     current_max = await db.scalar(
-        select(func.max(PlaybookVersion.version_number)).where(PlaybookVersion.playbook_id == playbook_id)
+        select(func.max(PlaybookVersion.version_number)).where(
+            PlaybookVersion.playbook_id == playbook_id
+        )
     )
     version_number = (current_max or 0) + 1
 
@@ -336,372 +406,383 @@ async def create_playbook_version(playbook_id: str, payload: PlaybookVersionCrea
     return {'playbook_id': playbook_id, 'version_id': version.id, 'version_number': version_number}
 
 
-@router.post('/capture-sessions/start')
-async def start_capture(payload: CaptureSessionStart, db: AsyncSession = Depends(get_db)) -> dict:
-    team = await db.get(Team, payload.team_id)
+# ── Capture (Teach mode) ────────────────────────────────────────────────────
+
+@router.post('/teams/{team_id}/captures', response_model=CaptureOut)
+async def create_capture(
+    team_id: str, payload: CaptureCreate, db: AsyncSession = Depends(get_db)
+) -> CaptureOut:
+    team = await db.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail='Team not found.')
 
-    user = await db.get(User, payload.user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail='User not found.')
-
     capture = CaptureSession(
-        team_id=payload.team_id,
+        team_id=team_id,
         user_id=payload.user_id,
-        title=payload.title or 'Untitled Capture Session',
-        status=CaptureStatus.ACTIVE,
+        title=payload.title,
+        status=CaptureStatus.RECORDING,
     )
     db.add(capture)
     await db.commit()
     await db.refresh(capture)
-
-    return {
-        'session_id': capture.id,
-        'team_id': capture.team_id,
-        'status': capture.status,
-        'provider': capture.provider,
-        'websocket_url': f'/api/ws/live/{capture.id}',
-    }
+    return CaptureOut.model_validate(capture, from_attributes=True)
 
 
-@router.post('/capture-sessions/{capture_session_id}/events')
-async def append_capture_event(capture_session_id: str, payload: CaptureEventIn, db: AsyncSession = Depends(get_db)) -> dict:
-    session = await db.get(CaptureSession, capture_session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail='Capture session not found.')
-
-    raw_events = list(session.raw_events or [])
-    event_payload = payload.model_dump(mode='json')
-    raw_events.append(event_payload)
-    session.raw_events = raw_events
-
-    action = live_service.normalize_event(event_payload)
-    derived = list(session.derived_actions or [])
-    derived.append(
-        {
-            'title': action.title,
-            'step_type': action.step_type,
-            'target_url': action.target_url,
-            'selector': action.selector,
-            'variables': action.variables,
-            'guardrails': action.guardrails,
-        }
+@router.get('/teams/{team_id}/captures', response_model=list[CaptureOut])
+async def list_captures(team_id: str, db: AsyncSession = Depends(get_db)) -> list[CaptureOut]:
+    rows = await db.scalars(
+        select(CaptureSession)
+        .where(CaptureSession.team_id == team_id)
+        .order_by(desc(CaptureSession.started_at))
     )
-    session.derived_actions = derived
+    return [CaptureOut.model_validate(c, from_attributes=True) for c in rows]
+
+
+@router.get('/captures/{capture_id}', response_model=CaptureOut)
+async def get_capture(capture_id: str, db: AsyncSession = Depends(get_db)) -> CaptureOut:
+    capture = await db.get(CaptureSession, capture_id)
+    if not capture:
+        raise HTTPException(status_code=404, detail='Capture not found.')
+    return CaptureOut.model_validate(capture, from_attributes=True)
+
+
+@router.post('/captures/{capture_id}/events', response_model=CaptureOut)
+async def add_capture_events(
+    capture_id: str, events: list[CaptureEventIn], db: AsyncSession = Depends(get_db)
+) -> CaptureOut:
+    capture = await db.get(CaptureSession, capture_id)
+    if not capture:
+        raise HTTPException(status_code=404, detail='Capture not found.')
+
+    current = list(capture.raw_events or [])
+    for ev in events:
+        current.append(ev.model_dump(exclude_none=True))
+    capture.raw_events = current
 
     await db.commit()
+    await db.refresh(capture)
+    return CaptureOut.model_validate(capture, from_attributes=True)
 
-    return {'capture_session_id': capture_session_id, 'total_events': len(raw_events), 'latest_action': action.title}
+
+@router.post('/captures/{capture_id}/finalize', response_model=CaptureOut)
+async def finalize_capture(capture_id: str, db: AsyncSession = Depends(get_db)) -> CaptureOut:
+    capture = await db.get(CaptureSession, capture_id)
+    if not capture:
+        raise HTTPException(status_code=404, detail='Capture not found.')
+
+    capture.status = CaptureStatus.COMPLETED
+    capture.ended_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(capture)
+    return CaptureOut.model_validate(capture, from_attributes=True)
 
 
-@router.post('/capture-sessions/{capture_session_id}/finalize')
-async def finalize_capture(capture_session_id: str, payload: CaptureFinalizeIn, db: AsyncSession = Depends(get_db)) -> dict:
-    session = await db.get(CaptureSession, capture_session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail='Capture session not found.')
+# ── Compile (Gemini) ────────────────────────────────────────────────────────
 
-    session.status = CaptureStatus.FINALIZED
-    session.ended_at = datetime.now(UTC)
+@router.post('/captures/{capture_id}/compile', response_model=CompileOut)
+async def compile_capture(capture_id: str, db: AsyncSession = Depends(get_db)) -> CompileOut:
+    capture = await db.get(CaptureSession, capture_id)
+    if not capture:
+        raise HTTPException(status_code=404, detail='Capture not found.')
 
-    created_playbook_id = None
-    if payload.create_playbook:
+    if not capture.raw_events:
+        raise HTTPException(status_code=400, detail='No capture events to compile.')
+
+    # Import and call Gemini service
+    from app.services.gemini_compile import compile_events
+
+    compiled_steps = await compile_events(capture.raw_events)
+
+    # Create or reuse playbook
+    if capture.playbook_id:
+        playbook = await db.get(Playbook, capture.playbook_id)
+        if not playbook:
+            raise HTTPException(status_code=404, detail='Linked playbook not found.')
+    else:
         playbook = Playbook(
-            team_id=session.team_id,
-            created_by=payload.created_by or session.user_id,
-            name=payload.playbook_name or session.title,
-            description=payload.description or 'Generated from Gemini Live capture.',
+            team_id=capture.team_id,
+            created_by=capture.user_id,
+            name=capture.title,
+            description=f'Auto-compiled from capture: {capture.title}',
+            tags=['automated', 'gemini-compiled'],
             status=PlaybookStatus.DRAFT,
-            tags=['captured', 'gemini-live'],
         )
         db.add(playbook)
         await db.flush()
+        capture.playbook_id = playbook.id
 
-        version = PlaybookVersion(
-            playbook_id=playbook.id,
-            version_number=1,
-            created_by=payload.created_by or session.user_id,
-            change_note='Imported from capture session',
-            graph={'source': 'gemini-live-capture', 'events': len(session.raw_events or [])},
+    # New version
+    current_max = await db.scalar(
+        select(func.max(PlaybookVersion.version_number)).where(
+            PlaybookVersion.playbook_id == playbook.id
         )
-        db.add(version)
-        await db.flush()
+    )
+    version_number = (current_max or 0) + 1
 
-        for idx, action in enumerate(session.derived_actions or [], start=1):
-            db.add(
-                PlaybookStep(
-                    playbook_version_id=version.id,
-                    sequence=idx,
-                    title=action.get('title', f'Step {idx}'),
-                    step_type=action.get('step_type', 'action'),
-                    target_url=action.get('target_url'),
-                    selector=action.get('selector'),
-                    variables=action.get('variables', {}),
-                    guardrails=action.get('guardrails', {}),
-                )
+    version = PlaybookVersion(
+        playbook_id=playbook.id,
+        version_number=version_number,
+        created_by=capture.user_id,
+        change_note=f'Gemini-compiled from capture session',
+        graph={'source': 'gemini-compile', 'steps': len(compiled_steps)},
+    )
+    db.add(version)
+    await db.flush()
+
+    for idx, step in enumerate(compiled_steps, start=1):
+        db.add(
+            PlaybookStep(
+                playbook_version_id=version.id,
+                sequence=idx,
+                title=step.get('title', f'Step {idx}'),
+                step_type=step.get('step_type', 'action'),
+                target_url=step.get('target_url'),
+                selector=step.get('selector'),
+                variables=step.get('variables', {}),
+                guardrails=step.get('guardrails', {}),
             )
+        )
 
-        created_playbook_id = playbook.id
-
+    capture.status = CaptureStatus.COMPILED
+    playbook.updated_at = datetime.now(UTC)
     await db.commit()
 
-    return {
-        'capture_session_id': session.id,
-        'status': session.status,
-        'events': len(session.raw_events or []),
-        'actions': len(session.derived_actions or []),
-        'created_playbook_id': created_playbook_id,
-    }
-
-
-@router.get('/teams/{team_id}/capture-sessions')
-async def list_capture_sessions(team_id: str, db: AsyncSession = Depends(get_db)) -> list[dict]:
-    sessions = await db.scalars(
-        select(CaptureSession).where(CaptureSession.team_id == team_id).order_by(desc(CaptureSession.started_at))
+    return CompileOut(
+        playbook_id=playbook.id,
+        version_id=version.id,
+        steps_count=len(compiled_steps),
     )
-    return [
-        {
-            'id': row.id,
-            'title': row.title,
-            'status': row.status,
-            'provider': row.provider,
-            'events': len(row.raw_events or []),
-            'actions': len(row.derived_actions or []),
-            'started_at': row.started_at,
-            'ended_at': row.ended_at,
-        }
-        for row in sessions
-    ]
+
+
+# ── Runs (batch execution) ──────────────────────────────────────────────────
+
+@router.get('/teams/{team_id}/runs', response_model=list[RunOut])
+async def list_runs(team_id: str, db: AsyncSession = Depends(get_db)) -> list[RunOut]:
+    rows = await db.scalars(
+        select(Run).where(Run.team_id == team_id).order_by(desc(Run.started_at))
+    )
+    return [RunOut.model_validate(r, from_attributes=True) for r in rows]
 
 
 @router.post('/teams/{team_id}/runs', response_model=RunOut)
-async def create_run(team_id: str, payload: RunCreate, db: AsyncSession = Depends(get_db)) -> RunOut:
+async def create_run(
+    team_id: str, payload: RunCreate, db: AsyncSession = Depends(get_db)
+) -> RunOut:
     team = await db.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail='Team not found.')
 
+    playbook = await db.scalar(
+        select(Playbook)
+        .where(Playbook.id == payload.playbook_id)
+        .options(selectinload(Playbook.versions).selectinload(PlaybookVersion.steps))
+    )
+    if not playbook:
+        raise HTTPException(status_code=404, detail='Playbook not found.')
+
+    latest_version = None
+    if playbook.versions:
+        latest_version = sorted(playbook.versions, key=lambda v: v.version_number)[-1]
+
     run = Run(
         team_id=team_id,
-        playbook_version_id=payload.playbook_version_id,
-        trigger_type=payload.trigger_type,
+        playbook_id=payload.playbook_id,
+        playbook_version_id=latest_version.id if latest_version else None,
+        status=RunStatus.PENDING,
+        trigger_type='csv_batch',
         input_source=payload.input_source,
-        status=RunStatus.RUNNING,
-        total_items=len(payload.items),
-        started_at=datetime.now(UTC),
+        total_items=len(payload.input_rows),
     )
     db.add(run)
     await db.flush()
 
-    success_count = 0
-    failed_count = 0
-
-    for idx, item in enumerate(payload.items):
-        is_success = (idx + 1) % 5 != 0
-        status = 'completed' if is_success else 'failed'
-        if is_success:
-            success_count += 1
-        else:
-            failed_count += 1
-
-        run_item = RunItem(
+    for idx, row_data in enumerate(payload.input_rows):
+        item = RunItem(
             run_id=run.id,
             row_index=idx,
-            input_payload=item,
-            status=status,
-            error_message=None if is_success else 'Validation check failed before submit',
+            input_payload=row_data,
+            status=RunStatus.PENDING,
         )
-        db.add(run_item)
-        await db.flush()
-
-        db.add(
-            RunEvent(
-                run_item_id=run_item.id,
-                step_title='Verify preconditions',
-                status='success' if is_success else 'error',
-                message='Verification passed' if is_success else 'Verification failed, run paused',
-                screenshot_url=None,
-            )
-        )
-
-        db.add(
-            Evidence(
-                run_item_id=run_item.id,
-                evidence_type='screenshot',
-                url=f'https://picsum.photos/seed/memoo-evidence-{idx}/1200/700',
-                metadata_json={'row_index': idx, 'status': status},
-            )
-        )
-
-    run.success_count = success_count
-    run.failed_count = failed_count
-    run.status = RunStatus.COMPLETED if failed_count == 0 else RunStatus.FAILED
-    run.ended_at = datetime.now(UTC)
+        db.add(item)
 
     await db.commit()
     await db.refresh(run)
 
+    # Fire-and-forget simulated execution
+    asyncio.create_task(_simulate_run(run.id))
+
     return RunOut.model_validate(run, from_attributes=True)
 
 
+async def _simulate_run(run_id: str) -> None:
+    """Simulate a run execution with realistic delays and verification logs."""
+    await asyncio.sleep(1)
+
+    from app.db.session import SessionLocal
+
+    async with SessionLocal() as db:
+        run = await db.scalar(
+            select(Run).where(Run.id == run_id).options(selectinload(Run.items))
+        )
+        if not run:
+            return
+
+        # Load playbook steps
+        steps: list[PlaybookStep] = []
+        if run.playbook_version_id:
+            version = await db.scalar(
+                select(PlaybookVersion)
+                .where(PlaybookVersion.id == run.playbook_version_id)
+                .options(selectinload(PlaybookVersion.steps))
+            )
+            if version:
+                steps = sorted(version.steps, key=lambda s: s.sequence)
+
+        # Load vault credentials for this team
+        vault_creds = list(await db.scalars(
+            select(VaultCredential).where(VaultCredential.team_id == run.team_id)
+        ))
+        vault_names = [c.name for c in vault_creds]
+
+        run.status = RunStatus.RUNNING
+        run.started_at = datetime.now(UTC)
+        await db.commit()
+
+        success = 0
+        failed = 0
+
+        for item in sorted(run.items, key=lambda i: i.row_index):
+            item.status = RunStatus.RUNNING
+            item.started_at = datetime.now(UTC)
+            await db.commit()
+
+            item_failed = False
+            for step in steps:
+                await asyncio.sleep(random.uniform(0.3, 0.8))
+
+                vault_used = None
+                if step.step_type in ('input', 'submit', 'navigate') and vault_names:
+                    vault_used = f'Using {random.choice(vault_names)} (secure)'
+
+                step_success = random.random() > 0.05  # 95% success
+                event = RunEvent(
+                    run_item_id=item.id,
+                    step_sequence=step.sequence,
+                    step_title=step.title,
+                    status='success' if step_success else 'failed',
+                    expected_state=step.guardrails.get('verify', f'{step.title} completed'),
+                    actual_state=step.guardrails.get('verify', f'{step.title} completed') if step_success else 'Element not found or timeout',
+                    vault_credential_used=vault_used,
+                )
+                db.add(event)
+                await db.commit()
+
+                if not step_success:
+                    item_failed = True
+                    break
+
+            item.status = RunStatus.FAILED if item_failed else RunStatus.COMPLETED
+            item.ended_at = datetime.now(UTC)
+            await db.commit()
+
+            if item_failed:
+                failed += 1
+            else:
+                success += 1
+
+        run.status = RunStatus.COMPLETED if failed == 0 else RunStatus.COMPLETED
+        run.success_count = success
+        run.failed_count = failed
+        run.ended_at = datetime.now(UTC)
+        await db.commit()
+
+
 @router.get('/runs/{run_id}')
-async def get_run(run_id: str, db: AsyncSession = Depends(get_db)) -> dict:
-    run = await db.get(Run, run_id)
+async def get_run_detail(run_id: str, db: AsyncSession = Depends(get_db)) -> RunDetailOut:
+    run = await db.scalar(
+        select(Run)
+        .where(Run.id == run_id)
+        .options(selectinload(Run.items).selectinload(RunItem.events))
+    )
     if not run:
         raise HTTPException(status_code=404, detail='Run not found.')
 
-    items = await db.scalars(select(RunItem).where(RunItem.run_id == run.id).order_by(RunItem.row_index))
-    item_rows = list(items)
+    playbook = await db.get(Playbook, run.playbook_id)
+    playbook_name = playbook.name if playbook else 'Unknown'
 
-    payload_items = []
-    for item in item_rows:
-        events = await db.scalars(select(RunEvent).where(RunEvent.run_item_id == item.id).order_by(RunEvent.created_at))
-        evidence = await db.scalars(select(Evidence).where(Evidence.run_item_id == item.id).order_by(Evidence.created_at))
+    items_out = []
+    events_map: dict[str, list[RunEventOut]] = {}
 
-        payload_items.append(
-            {
-                'id': item.id,
-                'row_index': item.row_index,
-                'input_payload': item.input_payload,
-                'status': item.status,
-                'error_message': item.error_message,
-                'events': [
-                    {
-                        'step_title': event.step_title,
-                        'status': event.status,
-                        'message': event.message,
-                        'screenshot_url': event.screenshot_url,
-                        'created_at': event.created_at,
-                    }
-                    for event in events
-                ],
-                'evidence': [
-                    {
-                        'evidence_type': row.evidence_type,
-                        'url': row.url,
-                        'metadata': row.metadata_json,
-                    }
-                    for row in evidence
-                ],
-            }
-        )
+    for item in sorted(run.items, key=lambda i: i.row_index):
+        items_out.append(RunItemOut.model_validate(item, from_attributes=True))
+        events_map[item.id] = [
+            RunEventOut.model_validate(e, from_attributes=True)
+            for e in sorted(item.events, key=lambda e: e.step_sequence)
+        ]
 
-    return {
-        'run': RunOut.model_validate(run, from_attributes=True).model_dump(),
-        'items': payload_items,
-    }
+    return RunDetailOut(
+        run=RunOut.model_validate(run, from_attributes=True),
+        items=items_out,
+        events_by_item=events_map,
+        playbook_name=playbook_name,
+    )
 
 
-@router.websocket('/ws/live/{capture_session_id}')
-async def live_capture_ws(websocket: WebSocket, capture_session_id: str) -> None:
-    await websocket.accept()
+# ── Vault ────────────────────────────────────────────────────────────────────
 
-    async with SessionLocal() as db:
-        session = await db.get(CaptureSession, capture_session_id)
-        if not session:
-            await websocket.send_json({'type': 'error', 'message': 'Capture session not found.'})
-            await websocket.close(code=4404)
-            return
-
-    try:
-        while True:
-            payload = await websocket.receive_json()
-
-            async with SessionLocal() as db:
-                session = await db.get(CaptureSession, capture_session_id)
-                if not session:
-                    await websocket.send_json({'type': 'error', 'message': 'Capture session no longer exists.'})
-                    continue
-
-                event_payload = {
-                    'timestamp': payload.get('timestamp') or datetime.now(UTC).isoformat(),
-                    'kind': payload.get('kind', 'event'),
-                    'target': payload.get('target'),
-                    'value': payload.get('value'),
-                    'url': payload.get('url'),
-                    'metadata': payload.get('metadata', {}),
-                }
-
-                raw_events = list(session.raw_events or [])
-                raw_events.append(event_payload)
-                session.raw_events = raw_events
-
-                action = live_service.normalize_event(event_payload)
-                derived = list(session.derived_actions or [])
-                derived.append(
-                    {
-                        'title': action.title,
-                        'step_type': action.step_type,
-                        'target_url': action.target_url,
-                        'selector': action.selector,
-                        'variables': action.variables,
-                        'guardrails': action.guardrails,
-                    }
-                )
-                session.derived_actions = derived
-                await db.commit()
-
-            await websocket.send_json(
-                {
-                    'type': 'normalized-action',
-                    'title': action.title,
-                    'step_type': action.step_type,
-                    'target_url': action.target_url,
-                    'selector': action.selector,
-                    'variables': action.variables,
-                }
-            )
-    except WebSocketDisconnect:
-        return
+@router.get('/teams/{team_id}/vault', response_model=list[VaultCredentialOut])
+async def list_vault(team_id: str, db: AsyncSession = Depends(get_db)) -> list[VaultCredentialOut]:
+    rows = await db.scalars(
+        select(VaultCredential)
+        .where(VaultCredential.team_id == team_id)
+        .order_by(VaultCredential.created_at)
+    )
+    return [VaultCredentialOut.model_validate(c, from_attributes=True) for c in rows]
 
 
-@router.get('/teams/{team_id}/runs', response_model=list[RunSummary])
-async def list_team_runs(team_id: str, db: AsyncSession = Depends(get_db)) -> list[RunSummary]:
+@router.post('/teams/{team_id}/vault', response_model=VaultCredentialOut)
+async def create_vault_credential(
+    team_id: str, payload: VaultCredentialCreate, db: AsyncSession = Depends(get_db)
+) -> VaultCredentialOut:
     team = await db.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail='Team not found.')
 
-    rows = await db.execute(
-        select(Run, Playbook.name.label('playbook_name'))
-        .join(PlaybookVersion, PlaybookVersion.id == Run.playbook_version_id)
-        .join(Playbook, Playbook.id == PlaybookVersion.playbook_id)
-        .where(Run.team_id == team_id)
-        .order_by(desc(Run.started_at))
+    # Mask value for storage (mock encryption)
+    masked = '••••' + payload.value[-4:] if len(payload.value) >= 4 else '••••••••'
+
+    cred = VaultCredential(
+        team_id=team_id,
+        name=payload.name,
+        service=payload.service,
+        credential_type=payload.credential_type,
+        masked_value=masked,
     )
-
-    results = []
-    for run, playbook_name in rows.all():
-        data = RunOut.model_validate(run, from_attributes=True).model_dump()
-        data['playbook_name'] = playbook_name
-        results.append(RunSummary(**data))
-    return results
-
-
-@router.patch('/playbooks/{playbook_id}', response_model=PlaybookOut)
-async def update_playbook(playbook_id: str, payload: PlaybookUpdate, db: AsyncSession = Depends(get_db)) -> PlaybookOut:
-    playbook = await db.get(Playbook, playbook_id)
-    if not playbook:
-        raise HTTPException(status_code=404, detail='Playbook not found.')
-
-    if payload.name is not None:
-        playbook.name = payload.name
-    if payload.description is not None:
-        playbook.description = payload.description
-    if payload.status is not None:
-        try:
-            playbook.status = PlaybookStatus(payload.status)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f'Invalid status: {payload.status}')
-    if payload.tags is not None:
-        playbook.tags = payload.tags
-
-    playbook.updated_at = datetime.now(UTC)
+    db.add(cred)
     await db.commit()
-    await db.refresh(playbook)
-    return PlaybookOut.model_validate(playbook, from_attributes=True)
+    await db.refresh(cred)
+    return VaultCredentialOut.model_validate(cred, from_attributes=True)
 
+
+@router.delete('/vault/{credential_id}')
+async def delete_vault_credential(credential_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    cred = await db.get(VaultCredential, credential_id)
+    if not cred:
+        raise HTTPException(status_code=404, detail='Credential not found.')
+    await db.delete(cred)
+    await db.commit()
+    return {'deleted': True}
+
+
+# ── Invites ──────────────────────────────────────────────────────────────────
 
 @router.post('/teams/{team_id}/invites')
-async def create_invite(team_id: str, email: str, role: MembershipRole = MembershipRole.MEMBER, db: AsyncSession = Depends(get_db)) -> dict:
+async def create_invite(
+    team_id: str,
+    email: str,
+    role: MembershipRole = MembershipRole.MEMBER,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     team = await db.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail='Team not found.')

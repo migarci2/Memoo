@@ -25,7 +25,8 @@ RUN pip install --no-cache-dir \
     "pydantic-settings>=2.10.0" \
     "python-dotenv>=1.1.0" \
     "python-multipart>=0.0.20" \
-    "google-genai>=1.35.0"
+    "bcrypt>=4.3.0" \
+    "google-genai>=1.14.0"
 
 # uvicorn --reload watches /app for changes — the source dir is
 # mounted as a bind-mount from the host in docker-compose.yml

@@ -24,6 +24,8 @@ export default function RegisterPage() {
     owner_name: '',
     owner_email: '',
     owner_title: '',
+    password: '',
+    confirm_password: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,17 +39,29 @@ export default function RegisterPage() {
   }
 
   async function submit() {
-    if (!form.team_name || !form.team_slug || !form.owner_name || !form.owner_email) {
+    if (!form.team_name || !form.team_slug || !form.owner_name || !form.owner_email || !form.password) {
       setError('Please fill in all required fields.');
+      return;
+    }
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (form.password !== form.confirm_password) {
+      setError('Passwords do not match.');
       return;
     }
     setLoading(true);
     setError(null);
     try {
       const data = await apiPost<BootstrapResponse>('/onboarding/team', {
-        ...form,
+        team_name: form.team_name,
         team_slug: form.team_slug.toLowerCase().trim(),
+        team_domain: form.team_domain || null,
+        owner_name: form.owner_name,
         owner_email: form.owner_email.toLowerCase().trim(),
+        owner_title: form.owner_title || null,
+        password: form.password,
       });
       // Auto-login: set session cookie directly
       setSession({
@@ -79,7 +93,7 @@ export default function RegisterPage() {
             Memoo
           </Link>
           <h1 className="mt-5 text-2xl font-extrabold tracking-tight">Create your workspace</h1>
-          <p className="mt-1.5 text-sm text-[var(--app-muted)]">Set up your team and start building playbooks.</p>
+          <p className="mt-1.5 text-sm text-[var(--app-muted)]">Set up your team and start collaborating.</p>
         </div>
 
         <div className="panel p-6">
@@ -118,8 +132,28 @@ export default function RegisterPage() {
                 type="email"
                 value={form.owner_email}
                 onChange={e => setForm(prev => ({ ...prev, owner_email: e.target.value }))}
-                onKeyDown={e => e.key === 'Enter' && submit()}
                 placeholder="name@company.com"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">
+              Password
+              <input
+                className="input"
+                type="password"
+                value={form.password}
+                onChange={e => setForm(prev => ({ ...prev, password: e.target.value }))}
+                placeholder="••••••••"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">
+              Confirm password
+              <input
+                className="input"
+                type="password"
+                value={form.confirm_password}
+                onChange={e => setForm(prev => ({ ...prev, confirm_password: e.target.value }))}
+                placeholder="••••••••"
+                onKeyDown={e => e.key === 'Enter' && submit()}
               />
             </label>
           </div>

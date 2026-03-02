@@ -16,4 +16,4 @@ ENV WATCHPACK_POLLING=true
 ENV CHOKIDAR_USEPOLLING=true
 ENV NEXT_TELEMETRY_DISABLED=1
 
-CMD ["npx", "next", "dev", "-H", "0.0.0.0", "--no-turbopack"]
+CMD ["npx", "next", "dev", "-H", "0.0.0.0"]

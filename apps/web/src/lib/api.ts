@@ -1,7 +1,11 @@
-import { API_BASE_URL } from '@/lib/config';
+import { API_BASE_URL, API_BASE_URL_SERVER } from '@/lib/config';
+
+function baseUrl() {
+  return typeof window === 'undefined' ? API_BASE_URL_SERVER : API_BASE_URL;
+}
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, { cache: 'no-store' });
+  const res = await fetch(`${baseUrl()}${path}`, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`GET ${path} failed (${res.status})`);
   }
@@ -9,7 +13,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(`${baseUrl()}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -24,7 +28,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(`${baseUrl()}${path}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -33,6 +37,19 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   if (!res.ok) {
     const message = await res.text();
     throw new Error(message || `PATCH ${path} failed (${res.status})`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+export async function apiDelete<T = unknown>(path: string): Promise<T> {
+  const res = await fetch(`${baseUrl()}${path}`, {
+    method: 'DELETE',
+  });
+
+  if (!res.ok) {
+    const message = await res.text();
+    throw new Error(message || `DELETE ${path} failed (${res.status})`);
   }
 
   return res.json() as Promise<T>;
