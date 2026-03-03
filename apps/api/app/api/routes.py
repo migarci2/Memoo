@@ -49,6 +49,7 @@ from app.schemas.entities import (
     RunEventOut,
     RunItemOut,
     RunOut,
+    SandboxStatusOut,
     TeamBootstrapResponse,
     TeamOnboardingCreate,
     TeamOverview,
@@ -600,6 +601,27 @@ async def compile_capture(capture_id: str, db: AsyncSession = Depends(get_db)) -
     )
 
 
+# ── Sandbox ───────────────────────────────────────────────────────────────────
+
+@router.get('/sandbox/status', response_model=SandboxStatusOut)
+async def sandbox_status() -> SandboxStatusOut:
+    """Return the health and connection URLs for the visible sandbox browser."""
+    import httpx
+    from app.core.config import get_settings
+    settings = get_settings()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f'{settings.sandbox_cdp_url}/json/version', timeout=3)
+            resp.raise_for_status()
+        return SandboxStatusOut(
+            healthy=True,
+            novnc_url='http://localhost:6080/vnc.html?autoconnect=true&resize=scale',
+            cdp_url=settings.sandbox_cdp_url,
+        )
+    except Exception:
+        return SandboxStatusOut(healthy=False)
+
+
 # ── Runs (batch execution) ──────────────────────────────────────────────────
 
 @router.get('/teams/{team_id}/runs', response_model=list[RunOut])
@@ -638,6 +660,7 @@ async def create_run(
         trigger_type='csv_batch',
         input_source=payload.input_source,
         total_items=len(payload.input_rows),
+        use_sandbox=payload.use_sandbox,
     )
     db.add(run)
     await db.flush()
@@ -661,16 +684,16 @@ async def create_run(
 
 
 async def _execute_run(run_id: str) -> None:
-    """Execute a run using Playwright (or fallback simulation).
+    """Execute a run using Playwright (or sandbox / fallback simulation).
 
-    Loads the playbook steps, iterates over each input row, and calls the
-    Playwright executor service.  Screenshots are stored as base64 in the
-    RunEvent records (in production these would go to MinIO/S3).
+    When the run has ``use_sandbox=True``, steps are executed in the shared
+    visible Chromium via CDP so the user can watch in real-time through noVNC.
     """
     await asyncio.sleep(0.5)  # small delay to let the HTTP response flush
 
     from app.db.session import SessionLocal
     from app.services.playwright_executor import execute_playbook_steps
+    from app.services.sandbox_executor import execute_in_sandbox
 
     async with SessionLocal() as db:
         run = await db.scalar(
@@ -720,13 +743,20 @@ async def _execute_run(run_id: str) -> None:
             # Build row data for variable substitution
             row_data = dict(item.input_payload or {})
 
-            # Execute all steps for this row via Playwright
-            step_results = await execute_playbook_steps(
-                steps=steps,
-                row_data=row_data,
-                headless=True,
-                screenshot=True,
-            )
+            # Execute steps — sandbox (visible browser) or headless Playwright
+            if run.use_sandbox:
+                step_results = await execute_in_sandbox(
+                    steps=steps,
+                    row_data=row_data,
+                    screenshot=True,
+                )
+            else:
+                step_results = await execute_playbook_steps(
+                    steps=steps,
+                    row_data=row_data,
+                    headless=True,
+                    screenshot=True,
+                )
 
             item_failed = False
             for result in step_results:

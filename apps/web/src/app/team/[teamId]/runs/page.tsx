@@ -109,7 +109,7 @@ export default function RunsListPage() {
                 )}
 
                 <span className="text-xs text-[var(--app-muted)] shrink-0">
-                  {new Date(run.created_at).toLocaleDateString()}
+                  {new Date(run.started_at).toLocaleDateString()}
                 </span>
               </button>
             );

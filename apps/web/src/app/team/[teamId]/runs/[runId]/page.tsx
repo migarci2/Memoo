@@ -6,12 +6,14 @@ import {
   ArrowLeft,
   CheckCircle,
   CircleNotch,
+  Desktop,
   Lock,
   XCircle,
 } from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { apiGet } from '@/lib/api';
+import { SANDBOX_NOVNC_URL } from '@/lib/config';
 import type { RunDetail, RunEvent, RunItem } from '@/lib/types';
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -107,6 +109,35 @@ export default function RunDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* Sandbox live viewer */}
+      {run.use_sandbox && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Desktop size={18} weight="duotone" className="text-[var(--app-blue)]" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--app-muted)]">
+              Live sandbox
+            </h2>
+            {run.status === 'running' && (
+              <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[rgba(76,175,80,0.15)] px-2.5 py-0.5 text-[11px] font-bold text-[#4a8c61]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#4a8c61] animate-pulse" />
+                Live
+              </span>
+            )}
+          </div>
+          <div className="panel overflow-hidden" style={{ aspectRatio: '16/10' }}>
+            <iframe
+              src={SANDBOX_NOVNC_URL}
+              className="h-full w-full border-0"
+              allow="clipboard-read; clipboard-write"
+              title="Sandbox browser — live view"
+            />
+          </div>
+          <p className="mt-2 text-xs text-[var(--app-muted)]">
+            You can interact with the browser above. The automation runs in the same session.
+          </p>
+        </div>
+      )}
 
       {/* Items + events */}
       <div className="space-y-3">

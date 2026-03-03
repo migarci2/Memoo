@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { CircleNotch, Play, UploadSimple } from '@phosphor-icons/react';
+import { CircleNotch, Desktop, Play, UploadSimple } from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
@@ -18,13 +18,14 @@ export default function NewRunPage() {
   const [playbookId, setPlaybookId] = useState('');
   const [inputSource, setInputSource] = useState('manual');
   const [csvText, setCsvText] = useState('');
+  const [useSandbox, setUseSandbox] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     apiGet<Playbook[]>(`/teams/${teamId}/playbooks`)
       .then(list => {
         // only show published playbooks
-        const published = list.filter(p => p.status === 'published');
+        const published = list.filter(p => (p.status as string) === 'published');
         setPlaybooks(published.length > 0 ? published : list);
       })
       .catch(() => {});
@@ -60,6 +61,7 @@ export default function NewRunPage() {
         playbook_id: playbookId,
         input_rows: inputRows,
         input_source: inputSource || 'csv_paste',
+        use_sandbox: useSandbox,
       });
       toast('Run started! Watching execution…', 'success');
       router.push(`/team/${teamId}/runs/${run.id}`);
@@ -133,6 +135,41 @@ export default function NewRunPage() {
           <p className="mt-1 text-xs text-[var(--app-muted)]">
             First row = headers (used as variable names). Each subsequent row = one run item.
             {csvText.trim() && ` Parsed: ${parseCsv(csvText).length} row(s).`}
+          </p>
+        </div>
+
+        {/* Sandbox toggle */}
+        <div>
+          <label className="mb-1 block text-sm font-semibold">Execution mode</label>
+          <button
+            type="button"
+            onClick={() => setUseSandbox(prev => !prev)}
+            className={`inline-flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${
+              useSandbox
+                ? 'border-[var(--app-blue)] bg-[rgba(59,130,246,0.08)] text-[var(--app-blue)]'
+                : 'border-[var(--app-line)] bg-transparent text-[var(--app-muted)] hover:bg-[var(--app-chip)]'
+            }`}
+          >
+            <Desktop size={18} weight={useSandbox ? 'duotone' : 'regular'} />
+            <span>
+              {useSandbox ? 'Sandbox — live browser' : 'Headless — background execution'}
+            </span>
+            <span
+              className={`ml-1 h-4 w-8 rounded-full transition-colors ${
+                useSandbox ? 'bg-[var(--app-blue)]' : 'bg-[var(--app-chip)]'
+              } relative inline-flex items-center`}
+            >
+              <span
+                className={`absolute h-3 w-3 rounded-full bg-white transition-transform ${
+                  useSandbox ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </span>
+          </button>
+          <p className="mt-1 text-xs text-[var(--app-muted)]">
+            {useSandbox
+              ? 'Runs in a visible browser you can watch and interact with — like ChatGPT agent mode.'
+              : 'Runs in the background with headless Playwright. Faster but not visible.'}
           </p>
         </div>
 

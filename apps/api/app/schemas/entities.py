@@ -170,12 +170,21 @@ class FrameAnalysisOut(BaseModel):
     events: list[FrameAnalysisEvent]
 
 
+# ── Sandbox ──────────────────────────────────────────────────────────────────
+
+class SandboxStatusOut(BaseModel):
+    healthy: bool
+    novnc_url: str | None = None
+    cdp_url: str | None = None
+
+
 # ── Run (batch execution) ───────────────────────────────────────────────────
 
 class RunCreate(BaseModel):
     playbook_id: str
     input_rows: list[dict] = Field(default_factory=list)
     input_source: str | None = None
+    use_sandbox: bool = False
 
 
 class RunOut(BaseModel):
@@ -191,6 +200,7 @@ class RunOut(BaseModel):
     total_items: int
     success_count: int
     failed_count: int
+    use_sandbox: bool = False
     started_at: datetime
     ended_at: datetime | None
 

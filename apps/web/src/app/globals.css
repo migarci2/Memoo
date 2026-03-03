@@ -99,6 +99,34 @@ a {
   font-weight: 700;
 }
 
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  color: var(--app-muted);
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: var(--app-chip);
+  color: var(--app-text);
+}
+.icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Canvas dot-grid background */
+.canvas-grid {
+  background-color: var(--app-surface);
+  background-image: radial-gradient(circle, rgba(95, 119, 132, 0.10) 1px, transparent 1px);
+}
+
 .landing-shell {
   min-height: 100dvh;
 }

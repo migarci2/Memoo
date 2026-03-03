@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     google_api_key: str = ''
     gemini_model: str = 'gemini-2.5-flash'
 
+    # Sandbox (remote browser)
+    sandbox_cdp_url: str = 'http://sandbox:9223'
+
 
 @lru_cache
 def get_settings() -> Settings:

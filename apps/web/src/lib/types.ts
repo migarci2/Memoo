@@ -116,6 +116,14 @@ export type FrameAnalysisResult = {
   events: FrameAnalysisEvent[];
 };
 
+// ── Sandbox ──────────────────────────────────────────────────────────────
+
+export type SandboxStatus = {
+  healthy: boolean;
+  novnc_url?: string | null;
+  cdp_url?: string | null;
+};
+
 // ── Runs (batch execution) ───────────────────────────────────────────────
 
 export type Run = {
@@ -129,6 +137,7 @@ export type Run = {
   total_items: number;
   success_count: number;
   failed_count: number;
+  use_sandbox: boolean;
   started_at: string;
   ended_at?: string | null;
 };

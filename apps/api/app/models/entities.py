@@ -181,6 +181,7 @@ class Run(Base):
     total_items: Mapped[int] = mapped_column(Integer, default=0)
     success_count: Mapped[int] = mapped_column(Integer, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    use_sandbox: Mapped[bool] = mapped_column(default=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

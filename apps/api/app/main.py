@@ -25,6 +25,12 @@ app.add_middleware(
 async def on_startup() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Ensure new columns exist on existing tables (no-op if already present)
+        await conn.execute(
+            __import__('sqlalchemy').text(
+                "ALTER TABLE runs ADD COLUMN IF NOT EXISTS use_sandbox BOOLEAN DEFAULT false"
+            )
+        )
     await ensure_bucket()
 
 

@@ -90,6 +90,7 @@ services:
       APP_DEBUG: ${APP_DEBUG:-true}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      SANDBOX_CDP_URL: http://sandbox:9223
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,6 +98,26 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      sandbox:
+        condition: service_healthy
+
+  sandbox:
+    build:
+      context: ./apps/sandbox
+      dockerfile: Dockerfile
+    container_name: memoo-sandbox
+    restart: unless-stopped
+    ports:
+      - '${SANDBOX_NOVNC_PORT:-6080}:6080'
+      - '${SANDBOX_CDP_PORT:-9222}:9223'
+    environment:
+      RESOLUTION: '1280x800x24'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8585/health']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   web:
     build:
@@ -114,6 +135,7 @@ services:
       - /app/.next
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      NEXT_PUBLIC_SANDBOX_NOVNC_URL: http://localhost:${SANDBOX_NOVNC_PORT:-6080}/vnc.html?autoconnect=true&resize=scale
       API_BASE_URL_INTERNAL: http://api:8000/api
     depends_on:
       - api

@@ -14,7 +14,7 @@ import {
 } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { cn } from '@/lib/utils';
@@ -74,6 +74,21 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
   const { session, isAuthenticated, logout } = useAuth();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    if (profileOpen) {
+      document.addEventListener('mousedown', handleClick);
+      return () => document.removeEventListener('mousedown', handleClick);
+    }
+  }, [profileOpen]);
 
   const teamNavItems: NavItem[] = teamId
     ? [
@@ -123,8 +138,11 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                     {displayName}
                   </span>
                 ) : null}
-                <div className="group relative">
-                  <button className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-blue)]/15 text-xs font-bold text-[var(--app-blue)] ring-1 ring-[var(--app-blue)]/20 transition-colors hover:bg-[var(--app-blue)] hover:text-white">
+                <div className="relative" ref={profileRef}>
+                  <button
+                    onClick={() => setProfileOpen(prev => !prev)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-blue)]/15 text-xs font-bold text-[var(--app-blue)] ring-1 ring-[var(--app-blue)]/20 transition-colors hover:bg-[var(--app-blue)] hover:text-white"
+                  >
                     {session.full_name
                       .split(' ')
                       .map(n => n[0])
@@ -132,19 +150,21 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                       .slice(0, 2)
                       .toUpperCase()}
                   </button>
-                  <div className="pointer-events-none absolute right-0 top-10 z-50 w-52 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface)]/98 p-2 opacity-0 shadow-lg backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-                    <div className="border-b border-[var(--app-line)] pb-2 pl-2 pr-2 pt-1">
-                      <p className="text-sm font-semibold">{session.full_name}</p>
-                      <p className="text-xs text-[var(--app-muted)]">{session.role}</p>
+                  {profileOpen && (
+                    <div className="absolute right-0 top-10 z-50 w-52 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface)]/98 p-2 shadow-lg backdrop-blur">
+                      <div className="border-b border-[var(--app-line)] pb-2 pl-2 pr-2 pt-1">
+                        <p className="text-sm font-semibold">{session.full_name}</p>
+                        <p className="text-xs text-[var(--app-muted)]">{session.role}</p>
+                      </div>
+                      <button
+                        onClick={() => { setProfileOpen(false); logout(); }}
+                        className="mt-1 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm text-[var(--app-muted)] transition-colors hover:bg-red-50 hover:text-red-600"
+                      >
+                        <SignOut size={14} weight="bold" />
+                        Sign out
+                      </button>
                     </div>
-                    <button
-                      onClick={logout}
-                      className="mt-1 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm text-[var(--app-muted)] transition-colors hover:bg-red-50 hover:text-red-600"
-                    >
-                      <SignOut size={14} weight="bold" />
-                      Sign out
-                    </button>
-                  </div>
+                  )}
                 </div>
               </>
             ) : (
