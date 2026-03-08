@@ -41,6 +41,7 @@ from app.schemas.entities import (
     FrameAnalysisIn,
     FrameAnalysisOut,
     HealthOut,
+    InviteCreate,
     PlaybookCreate,
     PlaybookOut,
     PlaybookUpdate,
@@ -52,6 +53,9 @@ from app.schemas.entities import (
     RunOut,
     SandboxStatusOut,
     TeamBootstrapResponse,
+    TeamMemberCreate,
+    TeamMemberOut,
+    TeamMemberProfileUpdate,
     TeamOnboardingCreate,
     TeamOverview,
     TeamSummary,
@@ -201,7 +205,12 @@ async def get_dashboard(team_id: str, db: AsyncSession = Depends(get_db)) -> Tea
     successful_runs = await db.scalar(
         select(func.count())
         .select_from(Run)
-        .where(Run.team_id == team_id, Run.status == RunStatus.COMPLETED)
+        # A run is "successful" only when it completed with zero failed items.
+        .where(
+            Run.team_id == team_id,
+            Run.status == RunStatus.COMPLETED,
+            Run.failed_count == 0,
+        )
     ) or 0
     vault_count = await db.scalar(
         select(func.count()).select_from(VaultCredential).where(VaultCredential.team_id == team_id)
@@ -220,8 +229,8 @@ async def get_dashboard(team_id: str, db: AsyncSession = Depends(get_db)) -> Tea
 
 # ── Members ──────────────────────────────────────────────────────────────────
 
-@router.get('/teams/{team_id}/members')
-async def list_team_members(team_id: str, db: AsyncSession = Depends(get_db)) -> list[dict]:
+@router.get('/teams/{team_id}/members', response_model=list[TeamMemberOut])
+async def list_team_members(team_id: str, db: AsyncSession = Depends(get_db)) -> list[TeamMemberOut]:
     team = await db.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail='Team not found.')
@@ -234,15 +243,104 @@ async def list_team_members(team_id: str, db: AsyncSession = Depends(get_db)) ->
     )
 
     return [
-        {
-            'id': user.id,
-            'email': user.email,
-            'full_name': user.full_name,
-            'job_title': user.job_title,
-            'role': role.value if hasattr(role, 'value') else str(role),
-        }
+        TeamMemberOut(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            job_title=user.job_title,
+            role=role.value if hasattr(role, 'value') else str(role),
+        )
         for user, role in rows.all()
     ]
+
+
+@router.post('/teams/{team_id}/members', response_model=TeamMemberOut)
+async def create_team_member(
+    team_id: str, payload: TeamMemberCreate, db: AsyncSession = Depends(get_db)
+) -> TeamMemberOut:
+    team = await db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail='Team not found.')
+
+    email = payload.email.lower()
+    user = await db.scalar(select(User).where(func.lower(User.email) == email))
+
+    if user:
+        existing_membership = await db.scalar(
+            select(Membership).where(Membership.team_id == team_id, Membership.user_id == user.id)
+        )
+        if existing_membership:
+            raise HTTPException(status_code=409, detail='User is already a member of this team.')
+
+        if payload.full_name.strip():
+            user.full_name = payload.full_name.strip()
+        if payload.job_title is not None:
+            user.job_title = payload.job_title.strip() or None
+        if payload.password and not user.password_hash:
+            user.password_hash = _hash_password(payload.password)
+    else:
+        user = User(
+            email=email,
+            full_name=payload.full_name.strip(),
+            job_title=(payload.job_title.strip() if payload.job_title else None),
+            password_hash=_hash_password(payload.password) if payload.password else None,
+        )
+        db.add(user)
+        await db.flush()
+
+    membership = Membership(
+        team_id=team_id,
+        user_id=user.id,
+        role=MembershipRole(payload.role),
+    )
+    db.add(membership)
+    await db.commit()
+    await db.refresh(user)
+
+    return TeamMemberOut(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        job_title=user.job_title,
+        role=membership.role.value,
+    )
+
+
+@router.patch('/teams/{team_id}/members/{user_id}', response_model=TeamMemberOut)
+async def update_team_member_profile(
+    team_id: str,
+    user_id: str,
+    payload: TeamMemberProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> TeamMemberOut:
+    membership = await db.scalar(
+        select(Membership).where(Membership.team_id == team_id, Membership.user_id == user_id)
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail='Team member not found.')
+
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found.')
+
+    if payload.full_name is not None:
+        cleaned_name = payload.full_name.strip()
+        if not cleaned_name:
+            raise HTTPException(status_code=400, detail='Name cannot be empty.')
+        user.full_name = cleaned_name
+    if payload.job_title is not None:
+        user.job_title = payload.job_title.strip() or None
+
+    await db.commit()
+    await db.refresh(user)
+
+    return TeamMemberOut(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        job_title=user.job_title,
+        role=membership.role.value if hasattr(membership.role, 'value') else str(membership.role),
+    )
 
 
 # ── Playbooks ────────────────────────────────────────────────────────────────
@@ -951,8 +1049,7 @@ async def delete_vault_credential(credential_id: str, db: AsyncSession = Depends
 @router.post('/teams/{team_id}/invites')
 async def create_invite(
     team_id: str,
-    email: str,
-    role: MembershipRole = MembershipRole.MEMBER,
+    payload: InviteCreate,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     team = await db.get(Team, team_id)
@@ -962,8 +1059,8 @@ async def create_invite(
     token = uuid4().hex
     invite = Invite(
         team_id=team_id,
-        email=email.lower(),
-        role=role,
+        email=payload.email.lower(),
+        role=MembershipRole(payload.role),
         token=token,
         status='pending',
         expires_at=datetime.now(UTC) + timedelta(days=7),

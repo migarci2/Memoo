@@ -15,6 +15,7 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (teamSlug: string, email: string, password: string) => Promise<void>;
+  updateSession: (patch: Partial<SessionData>) => void;
   logout: () => void;
 };
 
@@ -49,6 +50,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionState(data);
   }, []);
 
+  const updateSession = useCallback((patch: Partial<SessionData>) => {
+    setSessionState(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      setSession(next);
+      return next;
+    });
+  }, []);
+
   const logout = useCallback(() => {
     clearSession();
     setSessionState(null);
@@ -62,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: session !== null,
         isLoading,
         login,
+        updateSession,
         logout,
       }}
     >

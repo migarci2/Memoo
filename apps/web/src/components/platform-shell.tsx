@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowSquareOut,
   BookBookmark,
+  GearSix,
   House,
   List,
   Lock,
@@ -91,12 +92,18 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
     }
   }, [profileOpen]);
 
-  const teamNavItems: NavItem[] = teamId
+  const pathnameTeamMatch = pathname.match(/^\/team\/([^/]+)/);
+  const teamIdFromPath = pathnameTeamMatch?.[1];
+  const resolvedTeamId = teamId ?? teamIdFromPath ?? session?.team_id;
+  const isPublicRoute = pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/register');
+
+  const teamNavItems: NavItem[] = resolvedTeamId
     ? [
-        { label: 'Dashboard', href: `/team/${teamId}`, icon: House },
-        { label: 'Playbooks', href: `/team/${teamId}/playbooks`, icon: BookBookmark },
-        { label: 'Runs', href: `/team/${teamId}/runs`, icon: Play },
-        { label: 'Vault', href: `/team/${teamId}/vault`, icon: Lock },
+        { label: 'Dashboard', href: `/team/${resolvedTeamId}`, icon: House },
+        { label: 'Playbooks', href: `/team/${resolvedTeamId}/playbooks`, icon: BookBookmark },
+        { label: 'Runs', href: `/team/${resolvedTeamId}/runs`, icon: Play },
+        { label: 'Vault', href: `/team/${resolvedTeamId}/vault`, icon: Lock },
+        { label: 'Settings', href: `/team/${resolvedTeamId}/settings`, icon: GearSix },
       ]
     : [];
 
@@ -105,8 +112,10 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
     { label: 'Register', href: '/register', icon: UserPlus },
   ];
 
-  const navItems = isAuthenticated && teamId ? teamNavItems : publicNavItems;
-  const displayName = teamName ?? (teamId ? `Team ${teamId.slice(0, 6)}` : null);
+  const navItems = isPublicRoute ? publicNavItems : teamNavItems;
+  const showAuthenticatedUi = isAuthenticated && !!session;
+  const showPublicAuthCtas = isPublicRoute && !isAuthenticated;
+  const displayName = teamName ?? (resolvedTeamId ? `Team ${resolvedTeamId.slice(0, 6)}` : null);
   const initials = session
     ? session.full_name
         .split(' ')
@@ -136,7 +145,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
               </Link>
             </div>
 
-            {isAuthenticated && session ? (
+            {showAuthenticatedUi ? (
               <div className="mt-6 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface)]/88 p-3 shadow-inner">
                 <div className="flex items-center gap-2">
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-blue)] text-xs font-bold text-white shadow-sm ring-2 ring-white/50">
@@ -157,7 +166,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
 
             <nav className="mt-6 space-y-2">
               {navItems.map(item => {
-                const active = item.href === `/team/${teamId}` ? pathname === item.href : pathname.startsWith(item.href);
+                const active = item.href === `/team/${resolvedTeamId}` ? pathname === item.href : pathname.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}
@@ -184,7 +193,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
             </nav>
 
             <div className="mt-auto rounded-2xl border border-[var(--app-line)] bg-white/75 p-2">
-              {isAuthenticated ? (
+              {showAuthenticatedUi ? (
                 <button
                   onClick={logout}
                   className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--app-muted)] transition-colors hover:bg-red-50 hover:text-red-600"
@@ -192,13 +201,15 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                   <SignOut size={14} weight="bold" />
                   Sign out
                 </button>
-              ) : (
+              ) : showPublicAuthCtas ? (
                 <Link
                   href="/login"
                   className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--app-blue)] px-3 py-2 text-sm font-semibold text-white"
                 >
                   Log in
                 </Link>
+              ) : (
+                <div className="h-9" aria-hidden="true" />
               )}
             </div>
           </div>
@@ -217,7 +228,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                     key={item.href}
                     {...item}
                     active={
-                      item.href === `/team/${teamId}`
+                      item.href === `/team/${resolvedTeamId}`
                         ? pathname === item.href
                         : pathname.startsWith(item.href)
                     }
@@ -226,24 +237,51 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
               </nav>
 
               <div className="flex items-center justify-end gap-2">
-                {isAuthenticated && session ? (
+                {showAuthenticatedUi ? (
                   <>
                     {displayName ? (
                       <span className="hidden rounded-full border border-[var(--app-line)] bg-white/70 px-3 py-1 text-xs font-semibold text-[var(--app-muted)] sm:inline-block">
                         {displayName}
                       </span>
                     ) : null}
-                    <div className="group relative">
-                      <button className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-blue)]/15 text-xs font-bold text-[var(--app-blue)] ring-1 ring-[var(--app-blue)]/20 transition-colors hover:bg-[var(--app-blue)] hover:text-white">
+                    <div ref={profileRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setProfileOpen(open => !open)}
+                        aria-expanded={profileOpen}
+                        aria-haspopup="menu"
+                        aria-label="Open profile menu"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-blue)]/15 text-xs font-bold text-[var(--app-blue)] ring-1 ring-[var(--app-blue)]/20 transition-colors hover:bg-[var(--app-blue)] hover:text-white"
+                      >
                         {initials}
                       </button>
-                      <div className="pointer-events-none absolute right-0 top-10 z-50 w-52 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface)] p-2 opacity-0 shadow-lg backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+                      <div
+                        className={cn(
+                          'absolute right-0 top-10 z-50 w-52 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface)] p-2 shadow-lg backdrop-blur transition-all duration-150',
+                          profileOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0',
+                        )}
+                        role="menu"
+                      >
                         <div className="border-b border-[var(--app-line)] pb-2 pl-2 pr-2 pt-1">
                           <p className="text-sm font-semibold">{session.full_name}</p>
                           <p className="text-xs text-[var(--app-muted)]">{session.role}</p>
                         </div>
+                        {resolvedTeamId ? (
+                          <Link
+                            href={`/team/${resolvedTeamId}/settings`}
+                            onClick={() => setProfileOpen(false)}
+                            className="mt-1 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm text-[var(--app-muted)] transition-colors hover:bg-[var(--app-chip)] hover:text-[var(--app-blue)]"
+                          >
+                            <GearSix size={14} weight="bold" />
+                            Profile settings
+                          </Link>
+                        ) : null}
                         <button
-                          onClick={logout}
+                          type="button"
+                          onClick={() => {
+                            setProfileOpen(false);
+                            logout();
+                          }}
                           className="mt-1 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm text-[var(--app-muted)] transition-colors hover:bg-red-50 hover:text-red-600"
                         >
                           <SignOut size={14} weight="bold" />
@@ -252,13 +290,15 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                       </div>
                     </div>
                   </>
-                ) : (
+                ) : showPublicAuthCtas ? (
                   <Link
                     href="/login"
                     className="rounded-full bg-[var(--app-blue)] px-3 py-1.5 text-xs font-bold text-[var(--app-surface)] transition-opacity hover:opacity-90"
                   >
                     Log in
                   </Link>
+                ) : (
+                  <div className="h-8 w-8" aria-hidden="true" />
                 )}
 
                 <button
@@ -303,7 +343,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                     </button>
                   </div>
 
-                  {isAuthenticated && session ? (
+                  {showAuthenticatedUi ? (
                     <div className="mt-5 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface-2)] p-3">
                       <p className="font-semibold">{session.full_name}</p>
                       <p className="text-xs text-[var(--app-muted)]">{session.role}</p>
@@ -316,7 +356,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                         key={item.href}
                         {...item}
                         active={
-                          item.href === `/team/${teamId}`
+                          item.href === `/team/${resolvedTeamId}`
                             ? pathname === item.href
                             : pathname.startsWith(item.href)
                         }
@@ -325,7 +365,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                     ))}
                   </nav>
 
-                  {isAuthenticated ? (
+                  {showAuthenticatedUi ? (
                     <button
                       onClick={() => {
                         setMobileOpen(false);

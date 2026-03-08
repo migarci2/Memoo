@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -56,6 +57,32 @@ class TeamBootstrapResponse(BaseModel):
     team: TeamSummary
     owner: UserSummary
     next_step: str
+
+
+class TeamMemberOut(BaseModel):
+    id: str
+    email: EmailStr
+    full_name: str
+    job_title: str | None
+    role: str
+
+
+class TeamMemberCreate(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=160)
+    job_title: str | None = Field(default=None, max_length=160)
+    role: Literal['member', 'admin'] = 'member'
+    password: str | None = Field(default=None, min_length=6, max_length=128)
+
+
+class TeamMemberProfileUpdate(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    job_title: str | None = Field(default=None, max_length=160)
+
+
+class InviteCreate(BaseModel):
+    email: EmailStr
+    role: Literal['member', 'admin'] = 'member'
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────

@@ -63,6 +63,19 @@ export type TeamMember = {
   role: string;
 };
 
+export type TeamMemberCreateInput = {
+  email: string;
+  full_name: string;
+  job_title?: string | null;
+  role: 'member' | 'admin';
+  password?: string | null;
+};
+
+export type TeamMemberProfileUpdate = {
+  full_name?: string;
+  job_title?: string | null;
+};
+
 export type PlaybookStepCreate = {
   title: string;
   step_type: string;
