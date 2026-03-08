@@ -14,6 +14,7 @@ import logging
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+NON_ACTION_EVENT_KINDS = {'voice_note', 'gemini_clarification'}
 
 COMPILE_PROMPT = """You are an expert workflow analyst. Given the following raw browser interaction events 
 recorded during a user session, produce a structured list of semantic playbook steps.
@@ -41,6 +42,17 @@ Respond ONLY with a valid JSON array. No markdown, no explanation.
 Raw events:
 {events_json}
 """
+
+
+def _short_title(value: object, fallback: str, max_len: int = 220) -> str:
+    if not isinstance(value, str):
+        return fallback
+    text = ' '.join(value.split()).strip()
+    if not text:
+        return fallback
+    if len(text) <= max_len:
+        return text
+    return f'{text[: max_len - 3].rstrip()}...'
 
 
 async def compile_events(raw_events: list[dict]) -> list[dict]:
@@ -104,6 +116,8 @@ def _fallback_compile(raw_events: list[dict]) -> list[dict]:
     steps = []
     for idx, event in enumerate(raw_events):
         kind = event.get('kind', 'action')
+        if kind in NON_ACTION_EVENT_KINDS:
+            continue
         step: dict = {
             'step_type': kind,
             'target_url': event.get('url'),
@@ -129,15 +143,17 @@ def _fallback_compile(raw_events: list[dict]) -> list[dict]:
             step['title'] = f'Verify: {event.get("text", "expected state")}'
             step['guardrails'] = {'verify': event.get('text', '')}
         else:
-            step['title'] = event.get('text', f'Step {idx + 1}')
+            step['title'] = _short_title(event.get('text'), f'Step {idx + 1}')
 
         steps.append(step)
 
     return steps
 
 
-def _guess_variable_name(selector: str, value: str) -> str:
+def _guess_variable_name(selector: str | None, value: str | None) -> str:
     """Guess a variable name from the selector or value."""
+    selector = selector or ''
+    value = value or ''
     sel_lower = selector.lower()
 
     if 'email' in sel_lower:

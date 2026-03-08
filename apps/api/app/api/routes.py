@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -60,6 +61,23 @@ from app.schemas.entities import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+ALLOWED_STEP_TYPES = {'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'action'}
+NON_ACTION_EVENT_KINDS = {'voice_note', 'gemini_clarification'}
+
+
+def _clean_text(value: object, max_len: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = ' '.join(value.split()).strip()
+    if not text:
+        return None
+    if len(text) <= max_len:
+        return text
+    if max_len <= 3:
+        return text[:max_len]
+    return f'{text[:max_len - 3].rstrip()}...'
 
 
 def _hash_password(plain: str) -> str:
@@ -535,70 +553,126 @@ async def compile_capture(capture_id: str, db: AsyncSession = Depends(get_db)) -
     if not capture.raw_events:
         raise HTTPException(status_code=400, detail='No capture events to compile.')
 
-    # Import and call Gemini service
-    from app.services.gemini_compile import compile_events
+    try:
+        # Import and call Gemini service
+        from app.services.gemini_compile import compile_events
 
-    compiled_steps = await compile_events(capture.raw_events)
+        actionable_events = [
+            ev for ev in (capture.raw_events or [])
+            if isinstance(ev, dict) and ev.get('kind') not in NON_ACTION_EVENT_KINDS
+        ]
+        if not actionable_events:
+            raise HTTPException(
+                status_code=400,
+                detail='No actionable capture events to compile.',
+            )
 
-    # Create or reuse playbook
-    if capture.playbook_id:
-        playbook = await db.get(Playbook, capture.playbook_id)
-        if not playbook:
-            raise HTTPException(status_code=404, detail='Linked playbook not found.')
-    else:
-        playbook = Playbook(
-            team_id=capture.team_id,
-            created_by=capture.user_id,
-            name=capture.title,
-            description=f'Auto-compiled from capture: {capture.title}',
-            tags=['automated', 'gemini-compiled'],
-            status=PlaybookStatus.DRAFT,
-        )
-        db.add(playbook)
-        await db.flush()
-        capture.playbook_id = playbook.id
+        compiled_steps = await compile_events(actionable_events)
 
-    # New version
-    current_max = await db.scalar(
-        select(func.max(PlaybookVersion.version_number)).where(
-            PlaybookVersion.playbook_id == playbook.id
-        )
-    )
-    version_number = (current_max or 0) + 1
+        if not isinstance(compiled_steps, list):
+            raise HTTPException(status_code=500, detail='Compiler returned invalid step list.')
 
-    version = PlaybookVersion(
-        playbook_id=playbook.id,
-        version_number=version_number,
-        created_by=capture.user_id,
-        change_note=f'Gemini-compiled from capture session',
-        graph={'source': 'gemini-compile', 'steps': len(compiled_steps)},
-    )
-    db.add(version)
-    await db.flush()
+        normalized_steps: list[dict] = []
+        for idx, step in enumerate(compiled_steps, start=1):
+            if not isinstance(step, dict):
+                fallback_title = _clean_text(step, 220) or f'Step {idx}'
+                normalized_steps.append({
+                    'title': fallback_title,
+                    'step_type': 'action',
+                    'target_url': None,
+                    'selector': None,
+                    'variables': {},
+                    'guardrails': {},
+                })
+                continue
+            raw_step_type = step.get('step_type')
+            step_type = (
+                raw_step_type.strip().lower()
+                if isinstance(raw_step_type, str) and raw_step_type.strip()
+                else 'action'
+            )
+            if step_type not in ALLOWED_STEP_TYPES:
+                step_type = 'action'
 
-    for idx, step in enumerate(compiled_steps, start=1):
-        db.add(
-            PlaybookStep(
-                playbook_version_id=version.id,
-                sequence=idx,
-                title=step.get('title', f'Step {idx}'),
-                step_type=step.get('step_type', 'action'),
-                target_url=step.get('target_url'),
-                selector=step.get('selector'),
-                variables=step.get('variables', {}),
-                guardrails=step.get('guardrails', {}),
+            title = _clean_text(step.get('title'), 220) or f'Step {idx}'
+            target_url = _clean_text(step.get('target_url'), 500)
+            selector = _clean_text(step.get('selector'), 500)
+            normalized_steps.append({
+                'title': title,
+                'step_type': step_type,
+                'target_url': target_url,
+                'selector': selector,
+                'variables': step.get('variables') if isinstance(step.get('variables'), dict) else {},
+                'guardrails': step.get('guardrails') if isinstance(step.get('guardrails'), dict) else {},
+            })
+
+        # Create or reuse playbook
+        if capture.playbook_id:
+            playbook = await db.get(Playbook, capture.playbook_id)
+            if not playbook:
+                raise HTTPException(status_code=404, detail='Linked playbook not found.')
+        else:
+            playbook = Playbook(
+                team_id=capture.team_id,
+                created_by=capture.user_id,
+                name=capture.title,
+                description=f'Auto-compiled from capture: {capture.title}',
+                tags=['automated', 'gemini-compiled'],
+                status=PlaybookStatus.DRAFT,
+            )
+            db.add(playbook)
+            await db.flush()
+            capture.playbook_id = playbook.id
+
+        # New version
+        current_max = await db.scalar(
+            select(func.max(PlaybookVersion.version_number)).where(
+                PlaybookVersion.playbook_id == playbook.id
             )
         )
+        version_number = (current_max or 0) + 1
 
-    capture.status = CaptureStatus.COMPILED
-    playbook.updated_at = datetime.now(UTC)
-    await db.commit()
+        version = PlaybookVersion(
+            playbook_id=playbook.id,
+            version_number=version_number,
+            created_by=capture.user_id,
+            change_note='Gemini-compiled from capture session',
+            graph={'source': 'gemini-compile', 'steps': len(normalized_steps)},
+        )
+        db.add(version)
+        await db.flush()
 
-    return CompileOut(
-        playbook_id=playbook.id,
-        version_id=version.id,
-        steps_count=len(compiled_steps),
-    )
+        for idx, step in enumerate(normalized_steps, start=1):
+            db.add(
+                PlaybookStep(
+                    playbook_version_id=version.id,
+                    sequence=idx,
+                    title=step['title'],
+                    step_type=step['step_type'],
+                    target_url=step['target_url'],
+                    selector=step['selector'],
+                    variables=step['variables'],
+                    guardrails=step['guardrails'],
+                )
+            )
+
+        capture.status = CaptureStatus.COMPILED
+        if capture.ended_at is None:
+            capture.ended_at = datetime.now(UTC)
+        playbook.updated_at = datetime.now(UTC)
+        await db.commit()
+
+        return CompileOut(
+            playbook_id=playbook.id,
+            version_id=version.id,
+            steps_count=len(normalized_steps),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.exception('compile_capture failed for capture_id=%s', capture_id)
+        raise HTTPException(status_code=500, detail=f'Compile pipeline failed: {e}') from e
 
 
 # ── Sandbox ───────────────────────────────────────────────────────────────────

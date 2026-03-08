@@ -137,6 +137,7 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
       NEXT_PUBLIC_SANDBOX_NOVNC_URL: http://localhost:${SANDBOX_NOVNC_PORT:-6080}/vnc.html?autoconnect=true&resize=scale
       NEXT_PUBLIC_GEMINI_API_KEY: ${NEXT_PUBLIC_GEMINI_API_KEY:-}
+      NEXT_PUBLIC_GEMINI_LIVE_MODEL: ${NEXT_PUBLIC_GEMINI_LIVE_MODEL:-gemini-2.5-flash-native-audio-preview-12-2025}
       API_BASE_URL_INTERNAL: http://api:8000/api
     depends_on:
       - api

@@ -73,10 +73,11 @@ export default function CapturePage() {
   const [liveActive, setLiveActive] = useState(false);
   const live = useGeminiLive({
     onVoiceNote: (text, role) => {
-      // Save every voice note / Gemini clarification as a capture event
+      // Keep user speech in Live chat only; persist only Gemini's structured output.
+      if (role !== 'gemini') return;
       const captureId = captureIdRef.current;
       if (!captureId) return;
-      const kind = role === 'gemini' ? 'gemini_clarification' : 'voice_note';
+      const kind = 'gemini_clarification';
       apiPost(`/captures/${captureId}/events`, [
         { kind, text, timestamp: new Date().toISOString() },
       ]).catch(() => {});
@@ -94,6 +95,13 @@ export default function CapturePage() {
   useEffect(() => { liveActiveRef.current = liveActive; }, [liveActive]);
   useEffect(() => { liveStopRef.current   = live.stop; }, [live.stop]);
   useEffect(() => { liveSendRef.current   = live.sendContextUpdate; }, [live.sendContextUpdate]);
+  useEffect(() => {
+    if (!liveActive) return;
+    if (live.status === 'idle' || live.status === 'error') {
+      setLiveActive(false);
+      liveActiveRef.current = false;
+    }
+  }, [liveActive, live.status]);
 
   useEffect(() => {
     apiGet<CaptureSession[]>(`/teams/${teamId}/captures`)
@@ -135,6 +143,20 @@ export default function CapturePage() {
       setStreamReady(true);
 
       toast('Screen recording started — Gemini is watching', 'success');
+
+      // 4. Auto-start Gemini Live so spoken context is captured while recording.
+      try {
+        await live.start();
+        setLiveActive(true);
+        liveActiveRef.current = true;
+        toast('Gemini Live session active — speak to add context', 'success');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[capture] auto-start live failed:', msg);
+        setLiveActive(false);
+        liveActiveRef.current = false;
+        toast('Recording started, but Gemini Live voice did not connect', 'error');
+      }
     } catch (err) {
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -261,23 +283,96 @@ export default function CapturePage() {
 
   /* ── finalize & compile ────────────────────────────────────────────────── */
 
+  const isTransientFetchError = (err: unknown): boolean => {
+    if (!(err instanceof Error)) return false;
+    const msg = err.message.toLowerCase();
+    return (
+      err.name === 'TypeError'
+      || msg.includes('networkerror')
+      || msg.includes('failed to fetch')
+      || msg.includes('network request failed')
+    );
+  };
+
+  const shouldFallbackToDirectCompile = (err: unknown): boolean => {
+    if (!(err instanceof Error)) return false;
+    const msg = err.message.toLowerCase();
+    return (
+      msg.includes('internal server error')
+      || msg.includes('missing capture id')
+      || msg.includes('upstream compile request failed')
+      || msg.includes('unexpected token')
+    );
+  };
+
+  const compileViaServerRoute = async (captureId: string): Promise<CompileResult> => {
+    const res = await fetch(`/api/captures/${captureId}/compile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    if (!res.ok) {
+      const raw = await res.text();
+      let message = raw;
+      try {
+        const parsed = JSON.parse(raw) as { detail?: string };
+        if (parsed.detail) message = parsed.detail;
+      } catch {
+        // keep raw text
+      }
+      throw new Error(message || `Compile failed (${res.status})`);
+    }
+
+    return res.json() as Promise<CompileResult>;
+  };
+
+  const compileOnce = async (captureId: string): Promise<CompileResult> => {
+    try {
+      return await compileViaServerRoute(captureId);
+    } catch (err) {
+      if (!shouldFallbackToDirectCompile(err)) throw err;
+      return apiPost<CompileResult>(`/captures/${captureId}/compile`, {});
+    }
+  };
+
+  const compileWithRetry = async (captureId: string): Promise<CompileResult> => {
+    let lastErr: unknown;
+    const delaysMs = [0, 450, 1200];
+
+    for (let attempt = 0; attempt < delaysMs.length; attempt++) {
+      if (delaysMs[attempt] > 0) {
+        await new Promise((r) => setTimeout(r, delaysMs[attempt]));
+      }
+      try {
+        return await compileOnce(captureId);
+      } catch (err) {
+        lastErr = err;
+        if (!isTransientFetchError(err) || attempt === delaysMs.length - 1) {
+          throw err;
+        }
+      }
+    }
+
+    throw lastErr instanceof Error ? lastErr : new Error('Compile failed');
+  };
+
   const finalizeAndCompile = async () => {
     if (!session) return;
+    const captureId = session.id;
 
     stopScreenShare();
     setCompiling(true);
 
     try {
-      // Finalize
-      await apiPost<CaptureSession>(`/captures/${session.id}/finalize`, {});
-
-      // Compile with Gemini
-      const result = await apiPost<CompileResult>(`/captures/${session.id}/compile`, {});
+      // Compile endpoint marks the capture as compiled; no separate finalize request needed.
+      const result = await compileWithRetry(captureId);
 
       toast(`Compiled ${result.steps_count} steps with Gemini`, 'success');
       router.push(`/team/${teamId}/playbooks/${result.playbook_id}`);
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Compile failed', 'error');
+      const msg = err instanceof Error ? err.message : 'Compile failed';
+      toast(`Stop & compile failed: ${msg}`, 'error');
     } finally {
       setCompiling(false);
     }
