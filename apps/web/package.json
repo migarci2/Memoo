@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google/genai": "^1.44.0",
     "@phosphor-icons/react": "^2.1.10",
     "@types/js-cookie": "^3.0.6",
     "class-variance-authority": "^0.7.1",

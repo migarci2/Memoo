@@ -7,12 +7,16 @@ import {
   Desktop,
   Lightning,
   Eye,
+  Microphone,
   Record,
   Trash,
+  WaveTriangle,
 } from '@phosphor-icons/react';
 
+import { GeminiLivePanel } from '@/components/gemini-live-panel';
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
+import { useGeminiLive } from '@/hooks/use-gemini-live';
 import { apiGet, apiPost } from '@/lib/api';
 import type {
   CaptureEventInput,
@@ -64,6 +68,32 @@ export default function CapturePage() {
 
   /* past captures */
   const [captures, setCaptures] = useState<CaptureSession[]>([]);
+
+  /* live voice session */
+  const [liveActive, setLiveActive] = useState(false);
+  const live = useGeminiLive({
+    onVoiceNote: (text, role) => {
+      // Save every voice note / Gemini clarification as a capture event
+      const captureId = captureIdRef.current;
+      if (!captureId) return;
+      const kind = role === 'gemini' ? 'gemini_clarification' : 'voice_note';
+      apiPost(`/captures/${captureId}/events`, [
+        { kind, text, timestamp: new Date().toISOString() },
+      ]).catch(() => {});
+      // Also add to local event timeline
+      setEvents((prev: CaptureEventInput[]) => [...prev, { kind, text }]);
+    },
+    onError: (msg) => {
+      toast(msg, 'error');
+    },
+  });
+  // Stable refs so callbacks don't change on every render
+  const liveActiveRef = useRef(false);
+  const liveStopRef   = useRef<() => void>(live.stop);
+  const liveSendRef   = useRef<(t: string) => void>(live.sendContextUpdate);
+  useEffect(() => { liveActiveRef.current = liveActive; }, [liveActive]);
+  useEffect(() => { liveStopRef.current   = live.stop; }, [live.stop]);
+  useEffect(() => { liveSendRef.current   = live.sendContextUpdate; }, [live.sendContextUpdate]);
 
   useEffect(() => {
     apiGet<CaptureSession[]>(`/teams/${teamId}/captures`)
@@ -165,16 +195,22 @@ export default function CapturePage() {
       console.log('[capture] Gemini result:', result);
 
       if (result.detected && result.events.length > 0) {
-        setEvents(prev => [
-          ...prev,
-          ...result.events.map(e => ({
-            kind: e.kind,
-            url: e.url ?? undefined,
-            selector: e.selector ?? undefined,
-            value: e.value ?? undefined,
-            text: e.text ?? undefined,
-          })),
-        ]);
+        const newEvents = result.events.map(e => ({
+          kind: e.kind,
+          url: e.url ?? undefined,
+          selector: e.selector ?? undefined,
+          value: e.value ?? undefined,
+          text: e.text ?? undefined,
+        }));
+        setEvents(prev => [...prev, ...newEvents]);
+
+        // Notify Gemini Live session of the newly detected steps
+        if (liveActiveRef.current) {
+          for (const ev of newEvents) {
+            const label = ev.text ?? `${ev.kind}${ev.url ? ` on ${ev.url}` : ''}`;
+            liveSendRef.current(label);
+          }
+        }
       }
     } catch (err) {
       console.error('[capture] frame analysis failed:', err);
@@ -207,7 +243,7 @@ export default function CapturePage() {
       timerRef.current = null;
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop());
       streamRef.current = null;
     }
     if (videoRef.current) {
@@ -215,7 +251,13 @@ export default function CapturePage() {
     }
     captureIdRef.current = null;
     setStreamReady(false);
-  }, []);
+    // Stop the live voice session if active (via stable ref — no render deps)
+    if (liveActiveRef.current) {
+      liveStopRef.current();
+      setLiveActive(false);
+      liveActiveRef.current = false;
+    }
+  }, []); // empty deps — uses only refs, never stale
 
   /* ── finalize & compile ────────────────────────────────────────────────── */
 
@@ -256,6 +298,27 @@ export default function CapturePage() {
   };
 
   const isRecording = session !== null;
+
+  /* ── start / stop Gemini Live session ─────────────────────────────────── */
+
+  const startLiveSession = useCallback(async () => {
+    try {
+      await live.start();  // throws if connection fails — shows toast via onError
+      setLiveActive(true); // only runs if truly connected (setupComplete received)
+      toast('Gemini Live session active — speak to add context', 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // onError already showed a toast with the technical reason;
+      // show a user-friendly fallback only if nothing else showed
+      console.error('[startLiveSession]', msg);
+      setLiveActive(false);
+    }
+  }, [live, toast]);
+
+  const stopLiveSession = useCallback(() => {
+    live.stop();
+    setLiveActive(false);
+  }, [live]);
 
   /* ── render ────────────────────────────────────────────────────────────── */
 
@@ -367,6 +430,24 @@ export default function CapturePage() {
                 <span className="text-xs text-[var(--app-muted)]">
                   {frameCount} frames · {events.length} events
                 </span>
+
+                {/* ── Gemini Live toggle ─── */}
+                {!liveActive ? (
+                  <button
+                    onClick={startLiveSession}
+                    title="Start a live voice session with Gemini"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--app-blue)]/30 bg-[var(--app-blue)]/8 px-3 py-1.5 text-xs font-semibold text-[var(--app-blue)] transition-all hover:bg-[var(--app-blue)]/14 hover:border-[var(--app-blue)]/50"
+                  >
+                    <WaveTriangle size={12} weight="fill" />
+                    Start Live Session
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4a8566]/30 bg-[rgba(80,139,130,0.1)] px-3 py-1.5 text-xs font-semibold text-[#4a8566]">
+                    <Microphone size={12} weight="fill" />
+                    Live session active
+                  </span>
+                )}
+
                 <button
                   onClick={finalizeAndCompile}
                   disabled={compiling || events.length === 0}
@@ -472,6 +553,20 @@ export default function CapturePage() {
                 )}
               </div>
             </div>
+
+            {/* ── Gemini Live panel (shown when active) ─────────────── */}
+            {liveActive && (
+              <div className="mt-5">
+                <GeminiLivePanel
+                  status={live.status}
+                  transcript={live.transcript}
+                  isMuted={live.isMuted}
+                  onMute={live.mute}
+                  onUnmute={live.unmute}
+                  onStop={stopLiveSession}
+                />
+              </div>
+            )}
           </div>
         </>
       )}

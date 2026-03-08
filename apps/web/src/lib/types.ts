@@ -116,6 +116,16 @@ export type FrameAnalysisResult = {
   events: FrameAnalysisEvent[];
 };
 
+// ── Gemini Live (voice co-pilot) ──────────────────────────────────────────
+
+export type LiveSessionStatus = 'idle' | 'connecting' | 'listening' | 'speaking' | 'error';
+
+export type TranscriptEntry = {
+  role: 'user' | 'gemini';
+  text: string;
+  timestamp: string;
+};
+
 // ── Sandbox ──────────────────────────────────────────────────────────────
 
 export type SandboxStatus = {
