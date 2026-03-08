@@ -29,7 +29,7 @@ export default function GlobalError({
           }}
         >
           <span style={{ marginBottom: '1rem', color: '#8B8680', display: 'inline-flex' }}>
-            <WarningCircle size={52} weight="duotone" />
+            <WarningCircle size={52} weight="regular" />
           </span>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>Something went wrong</h1>
           <p style={{ marginTop: '0.75rem', color: '#8B8680', maxWidth: '36ch' }}>

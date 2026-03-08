@@ -59,7 +59,7 @@ type StepType = (typeof STEP_TYPES)[number];
 const ACTION_TYPES: StepType[] = ['navigate', 'click', 'input', 'submit', 'verify', 'wait'];
 const FLOW_TYPES: StepType[] = ['condition', 'loop'];
 
-type IconProps = { size?: number; weight?: 'bold' | 'duotone' | 'fill'; className?: string };
+type IconProps = { size?: number; weight?: 'bold' | 'regular' | 'fill'; className?: string };
 type StepMeta = {
   icon: React.FC<IconProps>;
   color: string;
@@ -815,7 +815,7 @@ export function StepFlowEditor({ playbookId, teamId, initialSteps, versionNumber
               return (
                 <button key={t} onClick={() => addNewNode(t)} title={m.label}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--app-chip)] ${m.color}`}>
-                  <m.icon size={16} weight="duotone" />
+                  <m.icon size={16} weight="regular" />
                 </button>
               );
             })}
@@ -825,7 +825,7 @@ export function StepFlowEditor({ playbookId, teamId, initialSteps, versionNumber
               return (
                 <button key={t} onClick={() => addNewNode(t)} title={m.label}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--app-chip)] ${m.color}`}>
-                  <m.icon size={16} weight="duotone" />
+                  <m.icon size={16} weight="regular" />
                 </button>
               );
             })}
@@ -963,7 +963,7 @@ function NodeCard({ node, selected, meta }: { node: EditableStep; selected: bool
       {/* Content */}
       <div className="flex items-center gap-2.5 py-2.5 pl-4 pr-3">
         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meta.bg} ${meta.color}`}>
-          <meta.icon size={16} weight="duotone" />
+          <meta.icon size={16} weight="regular" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold leading-snug text-[var(--app-text)]">
@@ -1101,7 +1101,7 @@ function EditSidebar({ node, updateStep, removeStep, moveStep, addToBranch, clos
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-[var(--app-line)] px-4 py-3">
         <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${meta.bg} ${meta.color}`}>
-          <meta.icon size={14} weight="duotone" />
+          <meta.icon size={14} weight="regular" />
         </div>
         <span className={`text-xs font-bold uppercase tracking-wider ${meta.color}`}>{meta.label}</span>
         <div className="flex-1" />
@@ -1129,7 +1129,7 @@ function EditSidebar({ node, updateStep, removeStep, moveStep, addToBranch, clos
                   <button key={t} type="button" onClick={() => updateStep(node._key, { step_type: t })}
                     className={`inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all
                       ${on ? `${tm.bg} ${tm.color} ring-2 ring-current/20` : 'bg-[var(--app-chip)]/40 text-[var(--app-muted)] hover:bg-[var(--app-chip)]'}`}>
-                    <tm.icon size={12} weight={on ? 'duotone' : 'bold'} />
+                    <tm.icon size={12} weight={on ? 'regular' : 'bold'} />
                     {tm.label}
                   </button>
                 );

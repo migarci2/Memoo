@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-[var(--app-bg)] px-6 text-center">
       <span className="mb-4 text-[var(--app-muted)] inline-flex">
-        <MagnifyingGlass size={56} weight="duotone" />
+        <MagnifyingGlass size={56} weight="regular" />
       </span>
       <span className="font-mono text-8xl font-extrabold leading-none text-[var(--app-chip)]">
         404

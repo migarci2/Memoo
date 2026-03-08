@@ -114,7 +114,7 @@ export default function RunDetailPage() {
       {run.use_sandbox && (
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Desktop size={18} weight="duotone" className="text-[var(--app-blue)]" />
+            <Desktop size={18} weight="regular" className="text-[var(--app-blue)]" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--app-muted)]">
               Live sandbox
             </h2>
