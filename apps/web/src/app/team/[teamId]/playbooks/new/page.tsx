@@ -1,13 +1,13 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
-import { apiPost } from '@/lib/api';
-import type { Playbook } from '@/lib/types';
+import { apiGet, apiPost } from '@/lib/api';
+import type { Playbook, PlaybookFolder } from '@/lib/types';
 
 export default function NewPlaybookPage() {
   const { teamId } = useParams<{ teamId: string }>();
@@ -15,11 +15,19 @@ export default function NewPlaybookPage() {
   const { toast } = useToast();
 
   const [form, setForm] = useState({
+    folderId: '',
     name: '',
     description: '',
     tags: '',
   });
+  const [folders, setFolders] = useState<PlaybookFolder[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    apiGet<PlaybookFolder[]>(`/teams/${teamId}/playbook-folders`)
+      .then(setFolders)
+      .catch(() => {});
+  }, [teamId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +39,7 @@ export default function NewPlaybookPage() {
     setSaving(true);
     try {
       const playbook = await apiPost<Playbook>(`/teams/${teamId}/playbooks`, {
+        folder_id: form.folderId || null,
         name: form.name.trim(),
         description: form.description.trim() || null,
         tags: form.tags
@@ -57,11 +66,28 @@ export default function NewPlaybookPage() {
           <a href={`/team/${teamId}/capture`} className="text-[var(--app-blue)] font-semibold hover:underline">
             teach a workflow
           </a>{' '}
-          to auto-generate one with Gemini.
+          to auto-generate one with Gemini. Manage folders{' '}
+          <a href={`/team/${teamId}/playbooks/folders`} className="text-[var(--app-blue)] font-semibold hover:underline">
+            here
+          </a>.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="panel max-w-2xl space-y-5 p-6">
+        <label className="grid gap-2 text-sm font-semibold">
+          Folder
+          <select
+            className="input"
+            value={form.folderId}
+            onChange={e => setForm(prev => ({ ...prev, folderId: e.target.value }))}
+          >
+            <option value="">Uncategorized</option>
+            {folders.map(folder => (
+              <option key={folder.id} value={folder.id}>{folder.name}</option>
+            ))}
+          </select>
+        </label>
+
         <label className="grid gap-2 text-sm font-semibold">
           Name
           <input

@@ -2,12 +2,12 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { CircleNotch, Desktop, Play, UploadSimple } from '@phosphor-icons/react';
+import { CircleNotch, Desktop, Play } from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
 import { apiGet, apiPost } from '@/lib/api';
-import type { Playbook, Run } from '@/lib/types';
+import type { Playbook, Run, VaultCredential } from '@/lib/types';
 
 export default function NewRunPage() {
   const { teamId } = useParams<{ teamId: string }>();
@@ -15,6 +15,8 @@ export default function NewRunPage() {
   const { toast } = useToast();
 
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
+  const [vaultCredentials, setVaultCredentials] = useState<VaultCredential[]>([]);
+  const [selectedVaultIds, setSelectedVaultIds] = useState<string[]>([]);
   const [playbookId, setPlaybookId] = useState('');
   const [inputSource, setInputSource] = useState('manual');
   const [csvText, setCsvText] = useState('');
@@ -28,6 +30,9 @@ export default function NewRunPage() {
         const published = list.filter(p => (p.status as string) === 'published');
         setPlaybooks(published.length > 0 ? published : list);
       })
+      .catch(() => {});
+    apiGet<VaultCredential[]>(`/teams/${teamId}/vault`)
+      .then(setVaultCredentials)
       .catch(() => {});
   }, [teamId]);
 
@@ -61,6 +66,7 @@ export default function NewRunPage() {
         playbook_id: playbookId,
         input_rows: inputRows,
         input_source: inputSource || 'csv_paste',
+        selected_vault_credential_ids: selectedVaultIds,
         use_sandbox: useSandbox,
       });
       toast('Run started! Watching execution…', 'success');
@@ -170,6 +176,53 @@ export default function NewRunPage() {
             {useSandbox
               ? 'Runs in a visible browser you can watch and interact with — like ChatGPT agent mode.'
               : 'Runs in the background with headless Playwright. Faster but not visible.'}
+          </p>
+        </div>
+
+        {/* Vault credentials */}
+        <div>
+          <label className="mb-1 block text-sm font-semibold">Vault credentials</label>
+          {vaultCredentials.length === 0 ? (
+            <p className="text-xs text-[var(--app-muted)]">
+              No credentials in vault. Add one in Vault if your playbook needs secrets.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {vaultCredentials.map(cred => {
+                const selected = selectedVaultIds.includes(cred.id);
+                return (
+                  <label
+                    key={cred.id}
+                    className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-sm ${
+                      selected
+                        ? 'border-[var(--app-blue)] bg-[rgba(59,130,246,0.08)]'
+                        : 'border-[var(--app-line)]'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={e => {
+                        setSelectedVaultIds(prev =>
+                          e.target.checked
+                            ? [...prev, cred.id]
+                            : prev.filter(id => id !== cred.id),
+                        );
+                      }}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-semibold">{cred.name}</span>
+                      <span className="block text-xs text-[var(--app-muted)] font-mono">
+                        {'{{'}{cred.template_key ?? 'vault_credential'}{'}'}{'}'} -> {cred.masked_value}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          <p className="mt-1 text-xs text-[var(--app-muted)]">
+            Selected credentials are injected as variables (e.g. {'{{'}vault_google_admin{'}'}{'}'}). Runs fail if selected credentials are not referenced by the playbook.
           </p>
         </div>
 

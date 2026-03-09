@@ -23,11 +23,22 @@ export type TeamOverview = {
 export type Playbook = {
   id: string;
   team_id: string;
+  folder_id?: string | null;
   name: string;
   description?: string | null;
-  status: 'draft' | 'active' | 'archived';
+  status: 'draft' | 'active' | 'published' | 'archived';
   tags: string[];
   created_at: string;
+};
+
+export type PlaybookFolder = {
+  id: string;
+  team_id: string;
+  name: string;
+  color?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type PlaybookStep = {
@@ -147,6 +158,54 @@ export type SandboxStatus = {
   cdp_url?: string | null;
 };
 
+// ── Automations ──────────────────────────────────────────────────────────
+
+export type PlaybookAutomation = {
+  id: string;
+  team_id: string;
+  playbook_id: string;
+  name: string;
+  trigger_type: 'interval' | 'webhook';
+  enabled: boolean;
+  interval_minutes?: number | null;
+  webhook_token?: string | null;
+  input_rows: Record<string, unknown>[];
+  input_source?: string | null;
+  selected_vault_credential_ids: string[];
+  use_sandbox: boolean;
+  next_run_at?: string | null;
+  last_run_at?: string | null;
+  last_run_id?: string | null;
+  last_error?: string | null;
+  is_running: boolean;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlaybookAutomationCreateInput = {
+  playbook_id: string;
+  name: string;
+  trigger_type: 'interval' | 'webhook';
+  interval_minutes?: number;
+  input_rows: Record<string, unknown>[];
+  input_source?: string;
+  selected_vault_credential_ids: string[];
+  use_sandbox: boolean;
+  enabled: boolean;
+};
+
+export type PlaybookAutomationUpdateInput = {
+  name?: string;
+  trigger_type?: 'interval' | 'webhook';
+  interval_minutes?: number;
+  input_rows?: Record<string, unknown>[];
+  input_source?: string;
+  selected_vault_credential_ids?: string[];
+  use_sandbox?: boolean;
+  enabled?: boolean;
+};
+
 // ── Runs (batch execution) ───────────────────────────────────────────────
 
 export type Run = {
@@ -160,6 +219,7 @@ export type Run = {
   total_items: number;
   success_count: number;
   failed_count: number;
+  selected_vault_credential_ids: string[];
   use_sandbox: boolean;
   started_at: string;
   ended_at?: string | null;
@@ -202,6 +262,7 @@ export type VaultCredential = {
   service: string;
   credential_type: string;
   masked_value: string;
+  template_key?: string | null;
   created_by?: string | null;
   created_at: string;
   last_used_at?: string | null;

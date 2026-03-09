@@ -6,6 +6,7 @@ import {
   BookBookmark,
   GearSix,
   House,
+  Lightning,
   List,
   Lock,
   Play,
@@ -102,6 +103,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
         { label: 'Dashboard', href: `/team/${resolvedTeamId}`, icon: House },
         { label: 'Playbooks', href: `/team/${resolvedTeamId}/playbooks`, icon: BookBookmark },
         { label: 'Runs', href: `/team/${resolvedTeamId}/runs`, icon: Play },
+        { label: 'Automations', href: `/team/${resolvedTeamId}/automations`, icon: Lightning },
         { label: 'Vault', href: `/team/${resolvedTeamId}/vault`, icon: Lock },
         { label: 'Settings', href: `/team/${resolvedTeamId}/settings`, icon: GearSix },
       ]

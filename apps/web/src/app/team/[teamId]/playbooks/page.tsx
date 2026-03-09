@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { apiGet } from '@/lib/api';
-import type { Playbook } from '@/lib/types';
+import type { Playbook, PlaybookFolder } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 
 type Props = {
@@ -18,7 +18,10 @@ const STATUS_COLORS = {
 export default async function PlaybooksPage({ params }: Props) {
   const { teamId } = await params;
 
-  const playbooks = await apiGet<Playbook[]>(`/teams/${teamId}/playbooks`);
+  const [playbooks, folders] = await Promise.all([
+    apiGet<Playbook[]>(`/teams/${teamId}/playbooks`),
+    apiGet<PlaybookFolder[]>(`/teams/${teamId}/playbook-folders`),
+  ]);
 
   const active = playbooks.filter(p => p.status === 'active');
   const draft = playbooks.filter(p => p.status === 'draft');
@@ -51,6 +54,12 @@ export default async function PlaybooksPage({ params }: Props) {
         <p className="landing-kicker">All playbooks</p>
         <div className="flex gap-2">
           <Link
+            href={`/team/${teamId}/playbooks/folders`}
+            className="btn-secondary rounded-full border border-[var(--app-line)] px-4 py-2 text-sm font-semibold"
+          >
+            Manage folders
+          </Link>
+          <Link
             href={`/team/${teamId}/capture`}
             className="btn-secondary rounded-full border border-[var(--app-line)] px-4 py-2 text-sm font-semibold"
           >
@@ -82,48 +91,61 @@ export default async function PlaybooksPage({ params }: Props) {
           </Link>
         </div>
       ) : (
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {playbooks.map(playbook => (
-            <Link
-              key={playbook.id}
-              href={`/team/${teamId}/playbooks/${playbook.id}`}
-              className="panel-tight group block p-5 transition-shadow hover:shadow-[0_4px_20px_rgba(95,119,132,0.14)]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="font-bold leading-tight tracking-tight group-hover:text-[var(--app-blue)] transition-colors">
-                  {playbook.name}
-                </h3>
-                <span
-                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${
-                    STATUS_COLORS[playbook.status as keyof typeof STATUS_COLORS] ?? STATUS_COLORS.draft
-                  }`}
-                >
-                  {playbook.status}
-                </span>
-              </div>
+        <div className="mt-4 space-y-6">
+          {[...folders.map(folder => ({ id: folder.id, name: folder.name })), { id: '__none__', name: 'Uncategorized' }].map(folder => {
+            const items = playbooks.filter(p => (folder.id === '__none__' ? !p.folder_id : p.folder_id === folder.id));
+            if (items.length === 0) return null;
+            return (
+              <section key={folder.id}>
+                <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">
+                  {folder.name}
+                </h2>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {items.map(playbook => (
+                    <Link
+                      key={playbook.id}
+                      href={`/team/${teamId}/playbooks/${playbook.id}`}
+                      className="panel-tight group block p-5 transition-shadow hover:shadow-[0_4px_20px_rgba(95,119,132,0.14)]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="font-bold leading-tight tracking-tight group-hover:text-[var(--app-blue)] transition-colors">
+                          {playbook.name}
+                        </h3>
+                        <span
+                          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${
+                            STATUS_COLORS[playbook.status as keyof typeof STATUS_COLORS] ?? STATUS_COLORS.draft
+                          }`}
+                        >
+                          {playbook.status}
+                        </span>
+                      </div>
 
-              {playbook.description ? (
-                <p className="mt-2 line-clamp-2 text-sm text-[var(--app-muted)]">{playbook.description}</p>
-              ) : (
-                <p className="mt-2 text-sm italic text-[var(--app-muted)]/60">No description</p>
-              )}
+                      {playbook.description ? (
+                        <p className="mt-2 line-clamp-2 text-sm text-[var(--app-muted)]">{playbook.description}</p>
+                      ) : (
+                        <p className="mt-2 text-sm italic text-[var(--app-muted)]/60">No description</p>
+                      )}
 
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                {playbook.tags.slice(0, 3).map(tag => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-[var(--app-chip)] px-2 py-0.5 text-xs font-semibold text-[var(--app-blue)]"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        {playbook.tags.slice(0, 3).map(tag => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-[var(--app-chip)] px-2 py-0.5 text-xs font-semibold text-[var(--app-blue)]"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
 
-              <p className="mt-3 border-t border-[var(--app-line)] pt-3 text-xs text-[var(--app-muted)]">
-                Updated {formatDate(playbook.created_at)}
-              </p>
-            </Link>
-          ))}
+                      <p className="mt-3 border-t border-[var(--app-line)] pt-3 text-xs text-[var(--app-muted)]">
+                        Updated {formatDate(playbook.created_at)}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
     </PlatformShell>

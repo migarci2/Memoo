@@ -62,7 +62,7 @@ export function DashboardClient({ teamId, overview, playbooks, runs }: Dashboard
             variants={itemVariant}
             className="group relative overflow-hidden rounded-3xl border border-[var(--app-line)] bg-gradient-to-b from-[var(--app-surface)] to-[var(--app-surface)] p-6 transition-all hover:shadow-lg hover:-translate-y-1"
           >
-            <div className="absolute -right-4 -top-4 rounded-full bg-[var(--app-chip)]/50 p-6 mix-blend-multiply opacity-50 transition-transform duration-500 group-hover:scale-110 text-[var(--app-blue)]">
+            <div className="absolute right-4 top-4 text-[var(--app-blue)]/40 transition-transform duration-500 group-hover:scale-110">
               <BookBookmark size={60} weight="regular" />
             </div>
             <div className="relative z-10 flex items-center gap-3">
@@ -81,7 +81,7 @@ export function DashboardClient({ teamId, overview, playbooks, runs }: Dashboard
             variants={itemVariant}
             className="group relative overflow-hidden rounded-3xl border border-[var(--app-line)] bg-gradient-to-b from-[var(--app-surface)] to-[var(--app-surface)] p-6 transition-all hover:shadow-lg hover:-translate-y-1"
           >
-            <div className="absolute -right-4 -top-4 rounded-full bg-[var(--app-chip)]/50 p-6 mix-blend-multiply opacity-50 transition-transform duration-500 group-hover:scale-110 text-[var(--app-blue)]">
+            <div className="absolute right-4 top-4 text-[var(--app-blue)]/40 transition-transform duration-500 group-hover:scale-110">
               <PlayCircle size={60} weight="regular" />
             </div>
             <div className="relative z-10 flex items-center gap-3">
@@ -100,7 +100,7 @@ export function DashboardClient({ teamId, overview, playbooks, runs }: Dashboard
             variants={itemVariant}
             className="group relative overflow-hidden rounded-3xl border border-[var(--app-line)] bg-gradient-to-b from-[var(--app-surface)] to-[var(--app-surface)] p-6 transition-all hover:shadow-lg hover:-translate-y-1"
           >
-            <div className="absolute -right-4 -top-4 rounded-full bg-[var(--app-chip)]/50 p-6 mix-blend-multiply opacity-50 transition-transform duration-500 group-hover:scale-110 text-[var(--app-blue)]">
+            <div className="absolute right-4 top-4 text-[var(--app-blue)]/40 transition-transform duration-500 group-hover:scale-110">
               <CheckCircle size={60} weight="regular" />
             </div>
             <div className="relative z-10 flex items-center gap-3">
@@ -119,7 +119,7 @@ export function DashboardClient({ teamId, overview, playbooks, runs }: Dashboard
             variants={itemVariant}
             className="group relative overflow-hidden rounded-3xl border border-[var(--app-line)] bg-gradient-to-b from-[var(--app-surface)] to-[var(--app-surface)] p-6 transition-all hover:shadow-lg hover:-translate-y-1"
           >
-            <div className="absolute -right-4 -top-4 rounded-full bg-[var(--app-chip)]/50 p-6 mix-blend-multiply opacity-50 transition-transform duration-500 group-hover:scale-110 text-[var(--app-blue)]">
+            <div className="absolute right-4 top-4 text-[var(--app-blue)]/40 transition-transform duration-500 group-hover:scale-110">
               <Vault size={60} weight="regular" />
             </div>
             <div className="relative z-10 flex items-center gap-3">

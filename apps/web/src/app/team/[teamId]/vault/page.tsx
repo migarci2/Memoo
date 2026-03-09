@@ -88,8 +88,8 @@ export default function VaultPage() {
           <p className="landing-kicker">Security</p>
           <h1 className="mt-1 text-4xl font-extrabold tracking-tight">Vault</h1>
           <p className="mt-1 max-w-[60ch] text-[var(--app-muted)]">
-            Store credentials securely. Playbook runs reference them as
-            &ldquo;Using X (secure)&rdquo; — values are never logged or exposed.
+            Store credentials securely. Use each template key in playbooks
+            (e.g. {'{{'}vault_google_admin{'}'}{'}'}) so runs/automations can inject the secret.
           </p>
         </div>
         <button
@@ -219,6 +219,9 @@ export default function VaultPage() {
               </div>
               <p className="mt-2 font-mono text-xs text-[var(--app-muted)]">
                 {cred.masked_value}
+              </p>
+              <p className="mt-1 font-mono text-[11px] text-[var(--app-muted)]">
+                {'{{'}{cred.template_key ?? 'vault_credential'}{'}'}{'}'}
               </p>
               <p className="mt-1 text-[10px] text-[var(--app-muted)]">
                 Added {new Date(cred.created_at).toLocaleDateString()}

@@ -42,6 +42,11 @@ class RunStatus(StrEnum):
     FAILED = 'failed'
 
 
+class AutomationTriggerType(StrEnum):
+    INTERVAL = 'interval'
+    WEBHOOK = 'webhook'
+
+
 # ── Core entities ────────────────────────────────────────────────────────────
 
 class Team(Base):
@@ -102,11 +107,25 @@ class Invite(Base):
 
 # ── Playbooks ────────────────────────────────────────────────────────────────
 
+class PlaybookFolder(Base):
+    __tablename__ = 'playbook_folders'
+    __table_args__ = (UniqueConstraint('team_id', 'name', name='uq_playbook_folder_team_name'),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    team_id: Mapped[str] = mapped_column(ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
+    name: Mapped[str] = mapped_column(String(140), nullable=False)
+    color: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
 class Playbook(Base):
     __tablename__ = 'playbooks'
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     team_id: Mapped[str] = mapped_column(ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
+    folder_id: Mapped[str | None] = mapped_column(ForeignKey('playbook_folders.id', ondelete='SET NULL'), nullable=True)
     created_by: Mapped[str] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -181,6 +200,7 @@ class Run(Base):
     total_items: Mapped[int] = mapped_column(Integer, default=0)
     success_count: Mapped[int] = mapped_column(Integer, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    selected_vault_credential_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     use_sandbox: Mapped[bool] = mapped_column(default=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -220,6 +240,36 @@ class RunEvent(Base):
     item: Mapped[RunItem] = relationship(back_populates='events')
 
 
+# ── Playbook automations ─────────────────────────────────────────────────────
+
+class PlaybookAutomation(Base):
+    __tablename__ = 'playbook_automations'
+    __table_args__ = (UniqueConstraint('webhook_token', name='uq_playbook_automation_webhook_token'),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    team_id: Mapped[str] = mapped_column(ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
+    playbook_id: Mapped[str] = mapped_column(ForeignKey('playbooks.id', ondelete='CASCADE'), nullable=False)
+    name: Mapped[str] = mapped_column(String(180), nullable=False)
+    trigger_type: Mapped[AutomationTriggerType] = mapped_column(
+        Enum(AutomationTriggerType), default=AutomationTriggerType.INTERVAL
+    )
+    enabled: Mapped[bool] = mapped_column(default=True)
+    interval_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    webhook_token: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    input_rows: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    input_source: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    selected_vault_credential_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    use_sandbox: Mapped[bool] = mapped_column(default=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_running: Mapped[bool] = mapped_column(default=False)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
 # ── Vault ────────────────────────────────────────────────────────────────────
 
 class VaultCredential(Base):
@@ -231,6 +281,7 @@ class VaultCredential(Base):
     service: Mapped[str] = mapped_column(String(120), nullable=False)
     credential_type: Mapped[str] = mapped_column(String(40), default='password')
     masked_value: Mapped[str] = mapped_column(String(200), default='••••••••')
+    encrypted_value: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[str | None] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

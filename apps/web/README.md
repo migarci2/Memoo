@@ -7,6 +7,8 @@ Frontend app for Memoo.
 - `/register`: register
 - `/onboarding`: onboarding
 - `/team/[teamId]`: product workspace
+- `/team/[teamId]/automations`: manage scheduled/webhook playbook automations
+- `/team/[teamId]/vault`: create credentials and get template keys for playbook variables
 
 ## Run locally
 

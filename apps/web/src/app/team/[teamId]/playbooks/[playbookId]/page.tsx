@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { apiGet } from '@/lib/api';
-import type { PlaybookDetail } from '@/lib/types';
+import type { PlaybookDetail, PlaybookFolder } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 
 import { PlaybookActions } from './playbook-actions';
@@ -24,6 +24,10 @@ export default async function PlaybookDetailPage({ params }: Props) {
   }
 
   const { playbook, latest_version } = detail;
+  const folders = await apiGet<PlaybookFolder[]>(`/teams/${teamId}/playbook-folders`).catch(() => []);
+  const folderName = playbook.folder_id
+    ? folders.find(f => f.id === playbook.folder_id)?.name ?? 'Folder'
+    : null;
 
   return (
     <PlatformShell teamId={teamId}>
@@ -50,6 +54,11 @@ export default async function PlaybookDetailPage({ params }: Props) {
             ) : null}
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              {folderName ? (
+                <span className="rounded-full border border-[var(--app-line)] bg-[var(--app-surface-2)] px-2.5 py-0.5 text-xs font-semibold text-[var(--app-muted)]">
+                  {folderName}
+                </span>
+              ) : null}
               {playbook.tags.map(tag => (
                 <span
                   key={tag}

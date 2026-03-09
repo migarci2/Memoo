@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -13,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.models.entities import (
+    AutomationTriggerType,
     CaptureSession,
     CaptureStatus,
     Invite,
@@ -20,11 +20,12 @@ from app.models.entities import (
     MembershipRole,
     OnboardingProgress,
     Playbook,
+    PlaybookFolder,
+    PlaybookAutomation,
     PlaybookStatus,
     PlaybookStep,
     PlaybookVersion,
     Run,
-    RunEvent,
     RunItem,
     RunStatus,
     Team,
@@ -43,6 +44,14 @@ from app.schemas.entities import (
     HealthOut,
     InviteCreate,
     PlaybookCreate,
+    PlaybookFolderCreate,
+    PlaybookFolderOut,
+    PlaybookFolderUpdate,
+    PlaybookAutomationCreate,
+    PlaybookAutomationOut,
+    PlaybookAutomationRunNowIn,
+    PlaybookAutomationUpdate,
+    PlaybookAutomationWebhookIn,
     PlaybookOut,
     PlaybookUpdate,
     PlaybookVersionCreate,
@@ -63,6 +72,8 @@ from app.schemas.entities import (
     VaultCredentialCreate,
     VaultCredentialOut,
 )
+from app.services.automation_engine import trigger_automation_now, trigger_webhook_now
+from app.services.run_engine import create_run_record, enqueue_run_execution, vault_template_key
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -345,6 +356,102 @@ async def update_team_member_profile(
 
 # ── Playbooks ────────────────────────────────────────────────────────────────
 
+@router.get('/teams/{team_id}/playbook-folders', response_model=list[PlaybookFolderOut])
+async def list_playbook_folders(team_id: str, db: AsyncSession = Depends(get_db)) -> list[PlaybookFolderOut]:
+    team = await db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail='Team not found.')
+    rows = await db.scalars(
+        select(PlaybookFolder)
+        .where(PlaybookFolder.team_id == team_id)
+        .order_by(PlaybookFolder.name.asc())
+    )
+    return [PlaybookFolderOut.model_validate(r, from_attributes=True) for r in rows]
+
+
+@router.post('/teams/{team_id}/playbook-folders', response_model=PlaybookFolderOut)
+async def create_playbook_folder(
+    team_id: str, payload: PlaybookFolderCreate, db: AsyncSession = Depends(get_db)
+) -> PlaybookFolderOut:
+    team = await db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail='Team not found.')
+
+    clean_name = payload.name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail='Folder name cannot be empty.')
+
+    existing = await db.scalar(
+        select(PlaybookFolder).where(
+            PlaybookFolder.team_id == team_id,
+            func.lower(PlaybookFolder.name) == clean_name.lower(),
+        )
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail='A folder with this name already exists.')
+
+    folder = PlaybookFolder(
+        team_id=team_id,
+        name=clean_name,
+        color=(payload.color.strip() if isinstance(payload.color, str) and payload.color.strip() else None),
+        created_by=payload.created_by,
+    )
+    db.add(folder)
+    await db.commit()
+    await db.refresh(folder)
+    return PlaybookFolderOut.model_validate(folder, from_attributes=True)
+
+
+@router.patch('/playbook-folders/{folder_id}', response_model=PlaybookFolderOut)
+async def update_playbook_folder(
+    folder_id: str, payload: PlaybookFolderUpdate, db: AsyncSession = Depends(get_db)
+) -> PlaybookFolderOut:
+    folder = await db.get(PlaybookFolder, folder_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail='Folder not found.')
+
+    if payload.name is not None:
+        clean_name = payload.name.strip()
+        if not clean_name:
+            raise HTTPException(status_code=400, detail='Folder name cannot be empty.')
+        existing = await db.scalar(
+            select(PlaybookFolder).where(
+                PlaybookFolder.team_id == folder.team_id,
+                func.lower(PlaybookFolder.name) == clean_name.lower(),
+                PlaybookFolder.id != folder.id,
+            )
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail='A folder with this name already exists.')
+        folder.name = clean_name
+
+    if payload.color is not None:
+        folder.color = payload.color.strip() or None
+
+    folder.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(folder)
+    return PlaybookFolderOut.model_validate(folder, from_attributes=True)
+
+
+@router.delete('/playbook-folders/{folder_id}')
+async def delete_playbook_folder(folder_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    folder = await db.get(PlaybookFolder, folder_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail='Folder not found.')
+
+    playbooks = list(await db.scalars(
+        select(Playbook).where(Playbook.folder_id == folder_id)
+    ))
+    for playbook in playbooks:
+        playbook.folder_id = None
+        playbook.updated_at = datetime.now(UTC)
+
+    await db.delete(folder)
+    await db.commit()
+    return {'deleted': True}
+
+
 @router.get('/teams/{team_id}/playbooks', response_model=list[PlaybookOut])
 async def list_playbooks(team_id: str, db: AsyncSession = Depends(get_db)) -> list[PlaybookOut]:
     records = await db.scalars(
@@ -361,8 +468,15 @@ async def create_playbook(
     if not team:
         raise HTTPException(status_code=404, detail='Team not found.')
 
+    folder_id = payload.folder_id
+    if folder_id:
+        folder = await db.get(PlaybookFolder, folder_id)
+        if not folder or folder.team_id != team_id:
+            raise HTTPException(status_code=400, detail='Invalid playbook folder.')
+
     playbook = Playbook(
         team_id=team_id,
+        folder_id=folder_id,
         created_by=payload.created_by,
         name=payload.name,
         description=payload.description,
@@ -450,6 +564,13 @@ async def update_playbook(
     playbook = await db.get(Playbook, playbook_id)
     if not playbook:
         raise HTTPException(status_code=404, detail='Playbook not found.')
+
+    if 'folder_id' in payload.model_fields_set:
+        if payload.folder_id:
+            folder = await db.get(PlaybookFolder, payload.folder_id)
+            if not folder or folder.team_id != playbook.team_id:
+                raise HTTPException(status_code=400, detail='Invalid playbook folder.')
+        playbook.folder_id = payload.folder_id
 
     if payload.name is not None:
         playbook.name = payload.name
@@ -794,6 +915,191 @@ async def sandbox_status() -> SandboxStatusOut:
         return SandboxStatusOut(healthy=False)
 
 
+# ── Playbook automations ─────────────────────────────────────────────────────
+
+@router.get('/teams/{team_id}/automations', response_model=list[PlaybookAutomationOut])
+async def list_automations(team_id: str, db: AsyncSession = Depends(get_db)) -> list[PlaybookAutomationOut]:
+    team = await db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail='Team not found.')
+
+    rows = await db.scalars(
+        select(PlaybookAutomation)
+        .where(PlaybookAutomation.team_id == team_id)
+        .order_by(desc(PlaybookAutomation.created_at))
+    )
+    return [PlaybookAutomationOut.model_validate(row, from_attributes=True) for row in rows]
+
+
+@router.post('/teams/{team_id}/automations', response_model=PlaybookAutomationOut)
+async def create_automation(
+    team_id: str,
+    payload: PlaybookAutomationCreate,
+    db: AsyncSession = Depends(get_db),
+) -> PlaybookAutomationOut:
+    team = await db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail='Team not found.')
+
+    playbook = await db.get(Playbook, payload.playbook_id)
+    if not playbook or playbook.team_id != team_id:
+        raise HTTPException(status_code=404, detail='Playbook not found for this team.')
+
+    selected_ids = list(dict.fromkeys(payload.selected_vault_credential_ids or []))
+    if selected_ids:
+        selected_count = await db.scalar(
+            select(func.count())
+            .select_from(VaultCredential)
+            .where(
+                VaultCredential.team_id == team_id,
+                VaultCredential.id.in_(selected_ids),
+            )
+        ) or 0
+        if selected_count != len(set(selected_ids)):
+            raise HTTPException(status_code=400, detail='Some selected vault credentials are invalid.')
+
+    now = datetime.now(UTC)
+    trigger_type = AutomationTriggerType(payload.trigger_type)
+    interval_minutes = payload.interval_minutes if trigger_type == AutomationTriggerType.INTERVAL else None
+    webhook_token = uuid4().hex if trigger_type == AutomationTriggerType.WEBHOOK else None
+    next_run_at = (
+        now + timedelta(minutes=interval_minutes)
+        if payload.enabled and trigger_type == AutomationTriggerType.INTERVAL and interval_minutes
+        else None
+    )
+
+    automation = PlaybookAutomation(
+        team_id=team_id,
+        playbook_id=payload.playbook_id,
+        name=payload.name,
+        trigger_type=trigger_type,
+        enabled=payload.enabled,
+        interval_minutes=interval_minutes,
+        webhook_token=webhook_token,
+        input_rows=payload.input_rows,
+        input_source=payload.input_source,
+        selected_vault_credential_ids=selected_ids,
+        use_sandbox=payload.use_sandbox,
+        next_run_at=next_run_at,
+        created_by=payload.created_by,
+    )
+    db.add(automation)
+    await db.commit()
+    await db.refresh(automation)
+    return PlaybookAutomationOut.model_validate(automation, from_attributes=True)
+
+
+@router.post('/automations/webhook/{webhook_token}', response_model=RunOut)
+async def trigger_automation_via_webhook(
+    webhook_token: str,
+    payload: PlaybookAutomationWebhookIn | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> RunOut:
+    run_id = await trigger_webhook_now(
+        webhook_token,
+        input_rows_override=(payload.input_rows if payload and payload.input_rows is not None else None),
+        input_source_override=(payload.input_source if payload else None),
+        use_sandbox_override=(payload.use_sandbox if payload else None),
+    )
+    run = await db.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=500, detail='Triggered run not found.')
+    return RunOut.model_validate(run, from_attributes=True)
+
+
+@router.patch('/automations/{automation_id}', response_model=PlaybookAutomationOut)
+async def update_automation(
+    automation_id: str,
+    payload: PlaybookAutomationUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> PlaybookAutomationOut:
+    automation = await db.get(PlaybookAutomation, automation_id)
+    if not automation:
+        raise HTTPException(status_code=404, detail='Automation not found.')
+
+    if payload.name is not None:
+        automation.name = payload.name
+    if payload.input_rows is not None:
+        automation.input_rows = payload.input_rows
+    if payload.input_source is not None:
+        automation.input_source = payload.input_source
+    if payload.selected_vault_credential_ids is not None:
+        deduped_ids = list(dict.fromkeys(payload.selected_vault_credential_ids))
+        selected_count = await db.scalar(
+            select(func.count())
+            .select_from(VaultCredential)
+            .where(
+                VaultCredential.team_id == automation.team_id,
+                VaultCredential.id.in_(deduped_ids),
+            )
+        ) or 0
+        if selected_count != len(set(deduped_ids)):
+            raise HTTPException(status_code=400, detail='Some selected vault credentials are invalid.')
+        automation.selected_vault_credential_ids = deduped_ids
+    if payload.use_sandbox is not None:
+        automation.use_sandbox = payload.use_sandbox
+    if payload.enabled is not None:
+        automation.enabled = payload.enabled
+
+    next_trigger_type = (
+        AutomationTriggerType(payload.trigger_type)
+        if payload.trigger_type is not None
+        else automation.trigger_type
+    )
+    automation.trigger_type = next_trigger_type
+
+    if next_trigger_type == AutomationTriggerType.INTERVAL:
+        if payload.interval_minutes is not None:
+            automation.interval_minutes = payload.interval_minutes
+        elif automation.interval_minutes is None:
+            automation.interval_minutes = 60
+    else:
+        automation.interval_minutes = None
+        if not automation.webhook_token:
+            automation.webhook_token = uuid4().hex
+
+    if not automation.enabled:
+        automation.next_run_at = None
+    elif automation.trigger_type == AutomationTriggerType.WEBHOOK:
+        automation.next_run_at = None
+    elif automation.enabled and automation.interval_minutes:
+        automation.next_run_at = datetime.now(UTC) + timedelta(minutes=automation.interval_minutes)
+
+    automation.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(automation)
+    return PlaybookAutomationOut.model_validate(automation, from_attributes=True)
+
+
+@router.delete('/automations/{automation_id}')
+async def delete_automation(automation_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    automation = await db.get(PlaybookAutomation, automation_id)
+    if not automation:
+        raise HTTPException(status_code=404, detail='Automation not found.')
+    await db.delete(automation)
+    await db.commit()
+    return {'deleted': True}
+
+
+@router.post('/automations/{automation_id}/run', response_model=RunOut)
+async def run_automation_now(
+    automation_id: str,
+    payload: PlaybookAutomationRunNowIn | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> RunOut:
+    run_id = await trigger_automation_now(
+        automation_id,
+        reason='manual',
+        input_rows_override=(payload.input_rows if payload else None),
+        input_source_override=(payload.input_source if payload else None),
+        use_sandbox_override=(payload.use_sandbox if payload else None),
+    )
+    run = await db.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=500, detail='Triggered run not found.')
+    return RunOut.model_validate(run, from_attributes=True)
+
+
 # ── Runs (batch execution) ──────────────────────────────────────────────────
 
 @router.get('/teams/{team_id}/runs', response_model=list[RunOut])
@@ -808,163 +1114,19 @@ async def list_runs(team_id: str, db: AsyncSession = Depends(get_db)) -> list[Ru
 async def create_run(
     team_id: str, payload: RunCreate, db: AsyncSession = Depends(get_db)
 ) -> RunOut:
-    team = await db.get(Team, team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail='Team not found.')
-
-    playbook = await db.scalar(
-        select(Playbook)
-        .where(Playbook.id == payload.playbook_id)
-        .options(selectinload(Playbook.versions).selectinload(PlaybookVersion.steps))
-    )
-    if not playbook:
-        raise HTTPException(status_code=404, detail='Playbook not found.')
-
-    latest_version = None
-    if playbook.versions:
-        latest_version = sorted(playbook.versions, key=lambda v: v.version_number)[-1]
-
-    run = Run(
+    run = await create_run_record(
+        db,
         team_id=team_id,
         playbook_id=payload.playbook_id,
-        playbook_version_id=latest_version.id if latest_version else None,
-        status=RunStatus.PENDING,
-        trigger_type='csv_batch',
+        input_rows=payload.input_rows,
         input_source=payload.input_source,
-        total_items=len(payload.input_rows),
+        selected_vault_credential_ids=payload.selected_vault_credential_ids,
         use_sandbox=payload.use_sandbox,
+        trigger_type='csv_batch',
     )
-    db.add(run)
-    await db.flush()
-
-    for idx, row_data in enumerate(payload.input_rows):
-        item = RunItem(
-            run_id=run.id,
-            row_index=idx,
-            input_payload=row_data,
-            status=RunStatus.PENDING,
-        )
-        db.add(item)
-
-    await db.commit()
-    await db.refresh(run)
-
-    # Fire-and-forget execution (Playwright if available, else simulated)
-    asyncio.create_task(_execute_run(run.id))
+    enqueue_run_execution(run.id)
 
     return RunOut.model_validate(run, from_attributes=True)
-
-
-async def _execute_run(run_id: str) -> None:
-    """Execute a run using Playwright (or sandbox / fallback simulation).
-
-    When the run has ``use_sandbox=True``, steps are executed in the shared
-    visible Chromium via CDP so the user can watch in real-time through noVNC.
-    """
-    await asyncio.sleep(0.5)  # small delay to let the HTTP response flush
-
-    from app.db.session import SessionLocal
-    from app.services.playwright_executor import execute_playbook_steps
-    from app.services.sandbox_executor import execute_in_sandbox
-
-    async with SessionLocal() as db:
-        run = await db.scalar(
-            select(Run).where(Run.id == run_id).options(selectinload(Run.items))
-        )
-        if not run:
-            return
-
-        # Load playbook steps
-        steps: list[dict] = []
-        if run.playbook_version_id:
-            version = await db.scalar(
-                select(PlaybookVersion)
-                .where(PlaybookVersion.id == run.playbook_version_id)
-                .options(selectinload(PlaybookVersion.steps))
-            )
-            if version:
-                for s in sorted(version.steps, key=lambda s: s.sequence):
-                    steps.append({
-                        'sequence': s.sequence,
-                        'title': s.title,
-                        'step_type': s.step_type,
-                        'target_url': s.target_url,
-                        'selector': s.selector,
-                        'variables': s.variables or {},
-                        'guardrails': s.guardrails or {},
-                    })
-
-        # Load vault credentials for context
-        vault_creds = list(await db.scalars(
-            select(VaultCredential).where(VaultCredential.team_id == run.team_id)
-        ))
-        vault_names = [c.name for c in vault_creds]
-
-        run.status = RunStatus.RUNNING
-        run.started_at = datetime.now(UTC)
-        await db.commit()
-
-        success_count = 0
-        failed_count = 0
-
-        for item in sorted(run.items, key=lambda i: i.row_index):
-            item.status = RunStatus.RUNNING
-            item.started_at = datetime.now(UTC)
-            await db.commit()
-
-            # Build row data for variable substitution
-            row_data = dict(item.input_payload or {})
-
-            # Execute steps — sandbox (visible browser) or headless Playwright
-            if run.use_sandbox:
-                step_results = await execute_in_sandbox(
-                    steps=steps,
-                    row_data=row_data,
-                    screenshot=True,
-                )
-            else:
-                step_results = await execute_playbook_steps(
-                    steps=steps,
-                    row_data=row_data,
-                    headless=True,
-                    screenshot=True,
-                )
-
-            item_failed = False
-            for result in step_results:
-                vault_used = None
-                if vault_names and result.get('title', '').lower().find('login') >= 0:
-                    vault_used = f'Using {vault_names[0]} (secure)'
-
-                event = RunEvent(
-                    run_item_id=item.id,
-                    step_sequence=result['sequence'],
-                    step_title=result['title'],
-                    status=result['status'],
-                    expected_state=result.get('expected_state', ''),
-                    actual_state=result.get('actual_state', ''),
-                    vault_credential_used=vault_used,
-                    # screenshot_url could be set after uploading to MinIO
-                )
-                db.add(event)
-
-                if result['status'] == 'failed':
-                    item_failed = True
-
-            item.status = RunStatus.FAILED if item_failed else RunStatus.COMPLETED
-            item.ended_at = datetime.now(UTC)
-            await db.commit()
-
-            if item_failed:
-                failed_count += 1
-            else:
-                success_count += 1
-
-        run.status = RunStatus.COMPLETED
-        run.success_count = success_count
-        run.failed_count = failed_count
-        run.ended_at = datetime.now(UTC)
-        await db.commit()
 
 
 @router.get('/runs/{run_id}')
@@ -1007,7 +1169,21 @@ async def list_vault(team_id: str, db: AsyncSession = Depends(get_db)) -> list[V
         .where(VaultCredential.team_id == team_id)
         .order_by(VaultCredential.created_at)
     )
-    return [VaultCredentialOut.model_validate(c, from_attributes=True) for c in rows]
+    return [
+        VaultCredentialOut(
+            id=c.id,
+            team_id=c.team_id,
+            name=c.name,
+            service=c.service,
+            credential_type=c.credential_type,
+            masked_value=c.masked_value,
+            template_key=vault_template_key(c.name),
+            created_by=c.created_by,
+            created_at=c.created_at,
+            last_used_at=c.last_used_at,
+        )
+        for c in rows
+    ]
 
 
 @router.post('/teams/{team_id}/vault', response_model=VaultCredentialOut)
@@ -1027,11 +1203,23 @@ async def create_vault_credential(
         service=payload.service,
         credential_type=payload.credential_type,
         masked_value=masked,
+        encrypted_value=payload.value,
     )
     db.add(cred)
     await db.commit()
     await db.refresh(cred)
-    return VaultCredentialOut.model_validate(cred, from_attributes=True)
+    return VaultCredentialOut(
+        id=cred.id,
+        team_id=cred.team_id,
+        name=cred.name,
+        service=cred.service,
+        credential_type=cred.credential_type,
+        masked_value=cred.masked_value,
+        template_key=vault_template_key(cred.name),
+        created_by=cred.created_by,
+        created_at=cred.created_at,
+        last_used_at=cred.last_used_at,
+    )
 
 
 @router.delete('/vault/{credential_id}')

@@ -67,3 +67,19 @@ API: `http://localhost:8000`
 ### Frontend (`apps/web/.env.local`)
 - `NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:8000/api`)
 - `GOOGLE_GENERATIVE_AI_API_KEY` (for Vercel AI SDK routes)
+
+## Playbook Automations
+
+The API now supports automated playbook execution in sandbox/headless mode:
+
+- Interval scheduler (background polling in API process)
+- Webhook trigger
+- Manual "run now" trigger for any automation
+
+Core endpoints:
+
+- `GET /api/teams/{team_id}/automations`
+- `POST /api/teams/{team_id}/automations`
+- `PATCH /api/automations/{automation_id}`
+- `POST /api/automations/{automation_id}/run`
+- `POST /api/automations/webhook/{webhook_token}`

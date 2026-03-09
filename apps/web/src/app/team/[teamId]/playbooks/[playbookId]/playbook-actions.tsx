@@ -1,11 +1,11 @@
 'use client';
 
 import { CircleNotch, FloppyDisk, Pencil, X } from '@phosphor-icons/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useToast } from '@/components/toast-provider';
-import { apiPatch } from '@/lib/api';
-import type { Playbook } from '@/lib/types';
+import { apiGet, apiPatch } from '@/lib/api';
+import type { Playbook, PlaybookFolder } from '@/lib/types';
 
 type Props = {
   playbook: Playbook;
@@ -14,8 +14,10 @@ type Props = {
 
 export function PlaybookActions({ playbook: initial, teamId }: Props) {
   const [playbook, setPlaybook] = useState(initial);
+  const [folders, setFolders] = useState<PlaybookFolder[]>([]);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
+    folderId: initial.folder_id ?? '',
     name: initial.name,
     description: initial.description ?? '',
     status: initial.status,
@@ -24,10 +26,17 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    apiGet<PlaybookFolder[]>(`/teams/${teamId}/playbook-folders`)
+      .then(setFolders)
+      .catch(() => {});
+  }, [teamId]);
+
   async function save() {
     setSaving(true);
     try {
       const updated = await apiPatch<Playbook>(`/playbooks/${playbook.id}`, {
+        folder_id: form.folderId || null,
         name: form.name.trim(),
         description: form.description.trim() || null,
         status: form.status,
@@ -54,7 +63,13 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
           <button
             onClick={() => {
               setEditing(false);
-              setForm({ name: playbook.name, description: playbook.description ?? '', status: playbook.status, tags: playbook.tags.join(', ') });
+              setForm({
+                folderId: playbook.folder_id ?? '',
+                name: playbook.name,
+                description: playbook.description ?? '',
+                status: playbook.status,
+                tags: playbook.tags.join(', '),
+              });
             }}
             className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--app-line)] text-[var(--app-muted)] hover:bg-[var(--app-surface-2)]"
           >
@@ -62,6 +77,19 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
           </button>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-2 text-sm font-medium">
+            Folder
+            <select
+              className="input"
+              value={form.folderId}
+              onChange={e => setForm(prev => ({ ...prev, folderId: e.target.value }))}
+            >
+              <option value="">Uncategorized</option>
+              {folders.map(folder => (
+                <option key={folder.id} value={folder.id}>{folder.name}</option>
+              ))}
+            </select>
+          </label>
           <label className="grid gap-2 text-sm font-medium md:col-span-2">
             Name
             <input className="input" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} />

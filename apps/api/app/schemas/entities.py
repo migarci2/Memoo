@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -99,6 +99,29 @@ class TeamOverview(BaseModel):
 
 # ── Playbook ─────────────────────────────────────────────────────────────────
 
+class PlaybookFolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=140)
+    color: str | None = Field(default=None, max_length=24)
+    created_by: str | None = None
+
+
+class PlaybookFolderUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=140)
+    color: str | None = Field(default=None, max_length=24)
+
+
+class PlaybookFolderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    team_id: str
+    name: str
+    color: str | None
+    created_by: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class PlaybookStepCreate(BaseModel):
     title: str
     step_type: str = 'action'
@@ -110,6 +133,7 @@ class PlaybookStepCreate(BaseModel):
 
 class PlaybookCreate(BaseModel):
     created_by: str | None = None
+    folder_id: str | None = None
     name: str
     description: str | None = None
     tags: list[str] = Field(default_factory=list)
@@ -121,6 +145,7 @@ class PlaybookOut(BaseModel):
 
     id: str
     team_id: str
+    folder_id: str | None
     name: str
     description: str | None
     status: str
@@ -129,6 +154,7 @@ class PlaybookOut(BaseModel):
 
 
 class PlaybookUpdate(BaseModel):
+    folder_id: str | None = None
     name: str | None = None
     description: str | None = None
     status: str | None = None
@@ -205,12 +231,82 @@ class SandboxStatusOut(BaseModel):
     cdp_url: str | None = None
 
 
+# ── Playbook Automations ─────────────────────────────────────────────────────
+
+class PlaybookAutomationCreate(BaseModel):
+    playbook_id: str
+    name: str = Field(min_length=1, max_length=180)
+    trigger_type: Literal['interval', 'webhook'] = 'interval'
+    interval_minutes: int | None = Field(default=60, ge=1, le=7 * 24 * 60)
+    input_rows: list[dict] = Field(default_factory=list)
+    input_source: str | None = None
+    selected_vault_credential_ids: list[str] = Field(default_factory=list)
+    use_sandbox: bool = True
+    enabled: bool = True
+    created_by: str | None = None
+
+    @model_validator(mode='after')
+    def validate_trigger(self) -> 'PlaybookAutomationCreate':
+        if self.trigger_type == 'interval' and not self.interval_minutes:
+            raise ValueError('interval_minutes is required for interval automations.')
+        return self
+
+
+class PlaybookAutomationUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=180)
+    trigger_type: Literal['interval', 'webhook'] | None = None
+    interval_minutes: int | None = Field(default=None, ge=1, le=7 * 24 * 60)
+    input_rows: list[dict] | None = None
+    input_source: str | None = None
+    selected_vault_credential_ids: list[str] | None = None
+    use_sandbox: bool | None = None
+    enabled: bool | None = None
+
+
+class PlaybookAutomationRunNowIn(BaseModel):
+    input_rows: list[dict] | None = None
+    input_source: str | None = None
+    use_sandbox: bool | None = None
+
+
+class PlaybookAutomationWebhookIn(BaseModel):
+    input_rows: list[dict] | None = None
+    input_source: str | None = None
+    use_sandbox: bool | None = None
+
+
+class PlaybookAutomationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    team_id: str
+    playbook_id: str
+    name: str
+    trigger_type: str
+    enabled: bool
+    interval_minutes: int | None
+    webhook_token: str | None
+    input_rows: list[dict]
+    input_source: str | None
+    selected_vault_credential_ids: list[str]
+    use_sandbox: bool
+    next_run_at: datetime | None
+    last_run_at: datetime | None
+    last_run_id: str | None
+    last_error: str | None
+    is_running: bool
+    created_by: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
 # ── Run (batch execution) ───────────────────────────────────────────────────
 
 class RunCreate(BaseModel):
     playbook_id: str
     input_rows: list[dict] = Field(default_factory=list)
     input_source: str | None = None
+    selected_vault_credential_ids: list[str] = Field(default_factory=list)
     use_sandbox: bool = False
 
 
@@ -227,6 +323,7 @@ class RunOut(BaseModel):
     total_items: int
     success_count: int
     failed_count: int
+    selected_vault_credential_ids: list[str]
     use_sandbox: bool = False
     started_at: datetime
     ended_at: datetime | None
@@ -282,6 +379,7 @@ class VaultCredentialOut(BaseModel):
     service: str
     credential_type: str
     masked_value: str
+    template_key: str | None = None
     created_by: str | None
     created_at: datetime
     last_used_at: datetime | None

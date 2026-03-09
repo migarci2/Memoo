@@ -111,6 +111,7 @@ async def seed() -> None:
             service='Google Workspace',
             credential_type='api_key',
             masked_value='AIza••••••••••Xq',
+            encrypted_value='demo-google-admin-token',
             created_by=owner.id,
         )
         cred_jira = VaultCredential(
@@ -119,6 +120,7 @@ async def seed() -> None:
             service='Jira',
             credential_type='api_key',
             masked_value='ATATT••••••••••5K',
+            encrypted_value='demo-jira-token',
             created_by=ops_user.id,
         )
         cred_slack = VaultCredential(
@@ -127,6 +129,7 @@ async def seed() -> None:
             service='Slack',
             credential_type='oauth_token',
             masked_value='xoxb-••••••••••Rw',
+            encrypted_value='demo-slack-token',
             created_by=analyst.id,
         )
         db.add_all([cred_google, cred_jira, cred_slack])
