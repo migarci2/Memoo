@@ -28,7 +28,8 @@ RUN pip install --no-cache-dir \
     "bcrypt>=4.3.0" \
     "google-genai>=1.14.0" \
     "playwright>=1.52.0" \
-    "httpx>=0.27.0"
+    "httpx>=0.27.0" \
+    "google-cloud-storage>=3.4.1"
 
 # Install Chromium for Playwright (needed for real execution)
 RUN playwright install --with-deps chromium || true

@@ -13,7 +13,12 @@ app/models/entities.py
 app/schemas/__init__.py
 app/schemas/entities.py
 app/services/__init__.py
+app/services/automation_engine.py
+app/services/gemini_compile.py
 app/services/gemini_live.py
+app/services/playwright_executor.py
+app/services/run_engine.py
+app/services/sandbox_executor.py
 app/services/storage.py
 memoo_api.egg-info/PKG-INFO
 memoo_api.egg-info/SOURCES.txt

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { apiGet } from '@/lib/api';
+import { getFolderColorToken } from '@/lib/playbook-folders';
 import type { PlaybookDetail, PlaybookFolder } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 
@@ -25,9 +26,9 @@ export default async function PlaybookDetailPage({ params }: Props) {
 
   const { playbook, latest_version } = detail;
   const folders = await apiGet<PlaybookFolder[]>(`/teams/${teamId}/playbook-folders`).catch(() => []);
-  const folderName = playbook.folder_id
-    ? folders.find(f => f.id === playbook.folder_id)?.name ?? 'Folder'
-    : null;
+  const folder = playbook.folder_id ? folders.find(f => f.id === playbook.folder_id) ?? null : null;
+  const folderName = folder?.name ?? null;
+  const folderToken = getFolderColorToken(folder?.color);
 
   return (
     <PlatformShell teamId={teamId}>
@@ -55,7 +56,14 @@ export default async function PlaybookDetailPage({ params }: Props) {
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {folderName ? (
-                <span className="rounded-full border border-[var(--app-line)] bg-[var(--app-surface-2)] px-2.5 py-0.5 text-xs font-semibold text-[var(--app-muted)]">
+                <span
+                  className="rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                  style={{
+                    borderColor: folderToken.border,
+                    backgroundColor: folderToken.soft,
+                    color: folderToken.text,
+                  }}
+                >
                   {folderName}
                 </span>
               ) : null}

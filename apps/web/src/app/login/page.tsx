@@ -68,7 +68,7 @@ function LoginForm() {
               <span className="h-2.5 w-2.5 rounded-full bg-[var(--app-sage)]" />
               <span className="col-span-2 h-2.5 rounded-full bg-[var(--app-sand)]" />
             </span>
-            Memoo
+            memoo
           </Link>
           <h1 className="mt-5 text-2xl font-extrabold tracking-tight">Welcome back</h1>
           <p className="mt-1.5 text-sm text-[var(--app-muted)]">Sign in with your team slug and work email.</p>

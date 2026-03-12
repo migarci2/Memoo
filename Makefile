@@ -1,8 +1,8 @@
-.PHONY: dev up down logs logs-api logs-web migrate shell-api shell-web shell-db clean rebuild seed prod-up prod-down prod-logs prod-logs-traefik prod-ps
+.PHONY: dev up down logs logs-api logs-web migrate shell-api shell-web shell-db clean rebuild seed prod-up prod-down prod-logs prod-logs-traefik prod-ps gcp-bootstrap-state gcp-build-push gcp-deploy
 
 # Start all services in development mode
 dev: up
-	@echo "Memoo is running!"
+	@echo "memoo is running!"
 	@echo "  Frontend: http://localhost:3000"
 	@echo "  Backend:  http://localhost:8000"
 	@echo "  API Docs: http://localhost:8000/docs"
@@ -67,3 +67,12 @@ seed:
 
 prod-seed:
 	docker compose --env-file .env.prod -f docker-compose.prod.yml exec api python -m scripts.seed_demo
+
+gcp-bootstrap-state:
+	./scripts/gcp/bootstrap_tf_state.sh
+
+gcp-build-push:
+	./scripts/gcp/build_and_push.sh
+
+gcp-deploy:
+	./scripts/gcp/deploy.sh

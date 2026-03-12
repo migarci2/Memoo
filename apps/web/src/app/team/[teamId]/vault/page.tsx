@@ -184,7 +184,7 @@ export default function VaultPage() {
         </div>
       ) : credentials.length === 0 ? (
         <div className="py-20 text-center text-[var(--app-muted)]">
-          <Lock size={40} className="mx-auto mb-3 opacity-30" />
+          <span className="mx-auto mb-3 inline-flex opacity-30"><Lock size={40} /></span>
           <p className="font-semibold">Vault is empty</p>
           <p className="mt-1 text-sm">Add credentials that playbook runs can reference securely.</p>
         </div>
@@ -194,7 +194,9 @@ export default function VaultPage() {
             <div key={cred.id} className="panel-tight p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Lock size={16} weight="fill" className="text-[var(--app-blue)] shrink-0" />
+                  <span className="inline-flex shrink-0 text-[var(--app-blue)]">
+                    <Lock size={16} weight="fill" />
+                  </span>
                   <h3 className="font-semibold text-sm">{cred.name}</h3>
                 </div>
                 <button

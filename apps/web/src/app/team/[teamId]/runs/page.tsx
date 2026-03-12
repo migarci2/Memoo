@@ -66,7 +66,7 @@ export default function RunsListPage() {
         </div>
       ) : runs.length === 0 ? (
         <div className="py-20 text-center text-[var(--app-muted)]">
-          <Play size={40} className="mx-auto mb-3 opacity-30" />
+          <span className="mx-auto mb-3 inline-flex opacity-30"><Play size={40} /></span>
           <p className="font-semibold">No runs yet</p>
           <p className="mt-1 text-sm">Start a batch run from a compiled playbook.</p>
         </div>

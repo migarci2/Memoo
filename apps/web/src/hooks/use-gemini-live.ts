@@ -9,18 +9,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LiveSessionStatus, TranscriptEntry } from '@/lib/types';
-import { GoogleGenAI } from '@google/genai';
+import { getGeminiApiKey, getGeminiLiveModel } from '@/lib/config';
+import { GoogleGenAI, Modality } from '@google/genai';
 
 /* ── constants ──────────────────────────────────────────────────────────────── */
 
-// Keep this overridable because Live model availability changes frequently.
-const LIVE_MODEL = (
-  typeof process !== 'undefined'
-    ? process.env.NEXT_PUBLIC_GEMINI_LIVE_MODEL
-    : undefined
-) || 'gemini-2.5-flash-native-audio-preview-12-2025';
-
-const SYSTEM_PROMPT = `You are a workflow recording co-pilot inside Memoo.
+const SYSTEM_PROMPT = `You are a workflow recording co-pilot inside memoo.
 
 The user is sharing their screen and performing a business workflow. A vision model watches the screen and detects steps. Your job:
 
@@ -155,11 +149,8 @@ export function useGeminiLive({
   onVoiceNote,
   onError,
 }: UseGeminiLiveOptions = {}): UseGeminiLiveReturn {
-  const apiKey = (
-    typeof process !== 'undefined'
-      ? process.env.NEXT_PUBLIC_GEMINI_API_KEY
-      : undefined
-  ) ?? '';
+  const apiKey = getGeminiApiKey();
+  const liveModel = getGeminiLiveModel();
 
   const [status, setStatus]     = useState<LiveSessionStatus>('idle');
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
@@ -208,7 +199,7 @@ export function useGeminiLive({
 
   /* ── audio playback ───────────────────────────────────────────────────────── */
 
-  const playNext = useCallback(() => {
+  const playNext = useCallback(function playNextInternal() {
     if (playingRef.current || audioQueue.current.length === 0) return;
     const ctx = audioCtxRef.current;
     if (!ctx) return;
@@ -228,7 +219,10 @@ export function useGeminiLive({
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(ctx.destination);
-    src.onended = () => { playingRef.current = false; playNext(); };
+    src.onended = () => {
+      playingRef.current = false;
+      playNextInternal();
+    };
     src.start();
   }, []);
 
@@ -244,7 +238,6 @@ export function useGeminiLive({
     audioCtxRef.current = ctx;
 
     const src = ctx.createMediaStreamSource(stream);
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     const proc = ctx.createScriptProcessor(4096, 1, 1);
     processorRef.current = proc;
 
@@ -278,9 +271,9 @@ export function useGeminiLive({
     
     console.log('[GeminiLive] Connecting SDK...');
     const session = await ai.live.connect({
-      model: LIVE_MODEL,
+      model: liveModel,
       config: {
-        responseModalities: ['AUDIO'],
+        responseModalities: [Modality.AUDIO],
         inputAudioTranscription: {},
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         speechConfig: {
@@ -405,13 +398,13 @@ export function useGeminiLive({
     sessionRef.current = session;
     // Some SDK/runtime combinations do not surface `onopen` reliably.
     setStatus('listening');
-  }, [apiKey, playNext, flushUserTranscript]);
+  }, [apiKey, clearUserFlushTimer, liveModel, playNext, flushUserTranscript]);
 
   /* ── public API ──────────────────────────────────────────────────────────── */
 
   const start = useCallback(async (): Promise<void> => {
     if (!apiKey) {
-      const msg = 'NEXT_PUBLIC_GEMINI_API_KEY is not set — add it to apps/web/.env.local';
+      const msg = 'Gemini API key is not configured for the web client.';
       console.error('[GeminiLive]', msg);
       onErrorRef.current?.(msg);
       setStatus('error');
@@ -421,7 +414,7 @@ export function useGeminiLive({
     setStatus('connecting');
     setTranscript([]);
     closingRef.current = false;
-    console.log('[GeminiLive] starting SDK with model:', LIVE_MODEL);
+    console.log('[GeminiLive] starting SDK with model:', liveModel);
 
     try {
       await openSession();
@@ -432,7 +425,7 @@ export function useGeminiLive({
       flushUserTranscript();
       throw err;
     }
-  }, [apiKey, openSession, startMic, flushUserTranscript]);
+  }, [apiKey, liveModel, openSession, startMic, flushUserTranscript]);
 
   const stop = useCallback(() => {
     flushUserTranscript();

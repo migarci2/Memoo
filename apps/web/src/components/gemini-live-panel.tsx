@@ -4,11 +4,10 @@ import { useEffect, useRef } from 'react';
 import {
   MicrophoneSlash,
   Microphone,
-  WaveTriangle,
-  Robot,
   X,
 } from '@phosphor-icons/react';
 
+import { GeminiLogo } from '@/components/gemini-logo';
 import type { LiveSessionStatus, TranscriptEntry } from '@/lib/types';
 
 /* ── types ─────────────────────────────────────────────────────────────────── */
@@ -85,7 +84,7 @@ function TranscriptBubble({ entry }: { entry: TranscriptEntry }) {
             : 'bg-[var(--app-chip)] text-[var(--app-muted)]'
         }`}
       >
-        {isGemini ? <Robot size={10} weight="fill" /> : 'U'}
+        {isGemini ? <GeminiLogo size={11} gradientId="gemini-live-bubble-logo" /> : 'U'}
       </span>
       <div
         className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${
@@ -155,7 +154,9 @@ export function GeminiLivePanel({
             </span>
 
             <div className="flex items-center gap-1.5">
-              <WaveTriangle size={13} weight="fill" className="text-[var(--app-blue)]" />
+              <span className="inline-flex">
+                <GeminiLogo size={14} gradientId="gemini-live-header-logo" />
+              </span>
               <span className="text-xs font-bold text-[var(--app-text)]">Gemini Live</span>
             </div>
 

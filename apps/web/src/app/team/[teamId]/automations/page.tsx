@@ -1,13 +1,13 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Lightning, Play, Trash, CircleNotch } from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
-import { API_BASE_URL } from '@/lib/config';
+import { getApiPublicBaseUrl } from '@/lib/config';
 import type {
   Playbook,
   PlaybookAutomation,
@@ -36,9 +36,9 @@ export default function AutomationsPage() {
   const [selectedVaultIds, setSelectedVaultIds] = useState<string[]>([]);
   const [inputRowsJson, setInputRowsJson] = useState('[{}]');
 
-  const webhookBase = useMemo(() => API_BASE_URL.replace(/\/$/, ''), []);
+  const webhookBase = useMemo(() => getApiPublicBaseUrl().replace(/\/$/, ''), []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const [pbList, autoList, vaultList] = await Promise.all([
@@ -57,11 +57,11 @@ export default function AutomationsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [playbookId, teamId, toast]);
 
   useEffect(() => {
     load().catch(() => {});
-  }, [teamId]);
+  }, [load]);
 
   const parseInputRows = (): Record<string, unknown>[] => {
     const parsed = JSON.parse(inputRowsJson);
@@ -272,7 +272,7 @@ export default function AutomationsPage() {
             disabled={saving}
             className="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
           >
-            {saving ? <CircleNotch size={16} className="animate-spin" /> : <Lightning size={16} weight="fill" />}
+            {saving ? <span className="inline-flex animate-spin"><CircleNotch size={16} /></span> : <Lightning size={16} weight="fill" />}
             {saving ? 'Creating…' : 'Create automation'}
           </button>
         </div>
@@ -280,12 +280,12 @@ export default function AutomationsPage() {
         <div className="space-y-3">
           {loading ? (
             <div className="panel py-20 text-center text-[var(--app-muted)]">
-              <CircleNotch size={24} className="mx-auto mb-2 animate-spin" />
+              <span className="mx-auto mb-2 inline-flex animate-spin"><CircleNotch size={24} /></span>
               <p className="text-sm">Loading automations…</p>
             </div>
           ) : automations.length === 0 ? (
             <div className="panel py-20 text-center text-[var(--app-muted)]">
-              <Lightning size={34} className="mx-auto mb-3 opacity-35" />
+              <span className="mx-auto mb-3 inline-flex opacity-35"><Lightning size={34} /></span>
               <p className="font-semibold">No automations yet</p>
               <p className="mt-1 text-sm">Create one to run playbooks automatically.</p>
             </div>
@@ -338,7 +338,10 @@ export default function AutomationsPage() {
                     className="rounded-full border border-[var(--app-line)] px-3 py-1 text-xs font-semibold hover:bg-[var(--app-chip)] disabled:opacity-60"
                   >
                     {runningId === auto.id ? (
-                      <span className="inline-flex items-center gap-1"><CircleNotch size={12} className="animate-spin" /> Running…</span>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="inline-flex animate-spin"><CircleNotch size={12} /></span>
+                        Running…
+                      </span>
                     ) : (
                       <span className="inline-flex items-center gap-1"><Play size={12} weight="fill" /> Run now</span>
                     )}

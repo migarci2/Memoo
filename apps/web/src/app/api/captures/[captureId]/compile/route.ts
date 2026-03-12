@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { API_BASE_URL_SERVER } from '@/lib/config';
+import { getApiBaseUrlServer } from '@/lib/config';
 
 export async function POST(
   _req: Request,
@@ -13,7 +13,7 @@ export async function POST(
       return NextResponse.json({ detail: 'Missing capture id' }, { status: 400 });
     }
 
-    const upstreamUrl = `${API_BASE_URL_SERVER}/captures/${captureId}/compile`;
+    const upstreamUrl = `${getApiBaseUrlServer()}/captures/${captureId}/compile`;
     const upstream = await fetch(upstreamUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

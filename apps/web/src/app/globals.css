@@ -14,9 +14,9 @@
   --app-chip: rgba(15, 103, 143, 0.13);
   --app-border: var(--app-line);
   --app-focus: rgba(15, 103, 143, 0.3);
-  --app-font-sans: var(--font-manrope);
-  --app-font-display: var(--font-cormorant);
-  --app-font-mono: var(--font-ibm-plex-mono);
+  --app-font-sans: var(--font-vag-rounded);
+  --app-font-display: var(--font-vag-rounded);
+  --app-font-mono: var(--font-vag-rounded);
 }
 
 @theme inline {
@@ -35,7 +35,7 @@ body {
 
 body {
   margin: 0;
-  font-family: var(--app-font-sans), 'Avenir Next', 'Segoe UI', sans-serif;
+  font-family: var(--app-font-sans), sans-serif;
   color: var(--app-text);
   background: linear-gradient(180deg, #e7eff6 0%, #e1eaf2 100%);
   position: relative;
@@ -76,7 +76,8 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--app-font-display), 'Times New Roman', serif;
+  font-family: var(--app-font-display), sans-serif;
+  font-weight: 900;
   letter-spacing: -0.02em;
 }
 

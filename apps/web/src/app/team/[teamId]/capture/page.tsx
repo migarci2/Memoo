@@ -518,7 +518,9 @@ export default function CapturePage() {
               <div className="flex items-center gap-3">
                 {analyzing && (
                   <span className="inline-flex items-center gap-1.5 text-xs text-[var(--app-muted)]">
-                    <Eye size={14} className="animate-pulse text-[var(--app-blue)]" />
+                    <span className="inline-flex animate-pulse text-[var(--app-blue)]">
+                      <Eye size={14} />
+                    </span>
                     Gemini analyzing…
                   </span>
                 )}
@@ -581,16 +583,17 @@ export default function CapturePage() {
               {/* Live event timeline */}
               <div className="lg:col-span-2">
                 <h3 className="mb-3 text-sm font-semibold flex items-center gap-2">
-                  <Record size={14} weight="fill" className="text-red-500" />
+                  <span className="inline-flex text-red-500">
+                    <Record size={14} weight="fill" />
+                  </span>
                   Detected actions ({events.length})
                 </h3>
 
                 {events.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-[var(--app-line)] p-8 text-center">
-                    <Eye
-                      size={32}
-                      className="mx-auto mb-3 text-[var(--app-muted)] opacity-40"
-                    />
+                    <span className="mx-auto mb-3 inline-flex text-[var(--app-muted)] opacity-40">
+                      <Eye size={32} />
+                    </span>
                     <p className="text-sm text-[var(--app-muted)]">
                       Perform actions on the shared screen.
                       <br />

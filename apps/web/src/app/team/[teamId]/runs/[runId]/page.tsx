@@ -13,14 +13,14 @@ import {
 
 import { PlatformShell } from '@/components/platform-shell';
 import { apiGet } from '@/lib/api';
-import { SANDBOX_NOVNC_URL } from '@/lib/config';
+import { getSandboxNovncUrl } from '@/lib/config';
 import type { RunDetail, RunEvent, RunItem } from '@/lib/types';
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
-  completed: <CheckCircle size={16} weight="fill" className="text-[#4a8c61]" />,
-  success: <CheckCircle size={16} weight="fill" className="text-[#4a8c61]" />,
-  failed: <XCircle size={16} weight="fill" className="text-[#b04040]" />,
-  pending: <CircleNotch size={16} className="text-[var(--app-muted)]" />,
+  completed: <span className="inline-flex text-[#4a8c61]"><CheckCircle size={16} weight="fill" /></span>,
+  success: <span className="inline-flex text-[#4a8c61]"><CheckCircle size={16} weight="fill" /></span>,
+  failed: <span className="inline-flex text-[#b04040]"><XCircle size={16} weight="fill" /></span>,
+  pending: <span className="inline-flex text-[var(--app-muted)]"><CircleNotch size={16} /></span>,
   running: (
     <span className="animate-spin inline-flex text-[var(--app-blue)]">
       <CircleNotch size={16} />
@@ -75,6 +75,7 @@ export default function RunDetailPage() {
     run.total_items > 0
       ? Math.round((run.success_count / run.total_items) * 100)
       : 0;
+  const sandboxNovncUrl = getSandboxNovncUrl();
 
   return (
     <PlatformShell teamId={teamId}>
@@ -114,7 +115,9 @@ export default function RunDetailPage() {
       {run.use_sandbox && (
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Desktop size={18} weight="regular" className="text-[var(--app-blue)]" />
+            <span className="inline-flex text-[var(--app-blue)]">
+              <Desktop size={18} weight="regular" />
+            </span>
             <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--app-muted)]">
               Live sandbox
             </h2>
@@ -127,7 +130,7 @@ export default function RunDetailPage() {
           </div>
           <div className="panel overflow-hidden" style={{ aspectRatio: '16/10' }}>
             <iframe
-              src={SANDBOX_NOVNC_URL}
+              src={sandboxNovncUrl}
               className="h-full w-full border-0"
               allow="clipboard-read; clipboard-write"
               title="Sandbox browser — live view"

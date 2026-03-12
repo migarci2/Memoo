@@ -14,3 +14,9 @@
 # DB and misc
 **/*.db
 .DS_Store
+
+# Terraform
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+infra/terraform/gcp/terraform.tfvars

@@ -44,7 +44,7 @@ function Logo() {
         <span className="h-2.5 w-2.5 rounded-full bg-[var(--app-sage)]" />
         <span className="col-span-2 h-2.5 rounded-full bg-[var(--app-sand)]" />
       </span>
-      Memoo
+      memoo
     </Link>
   );
 }

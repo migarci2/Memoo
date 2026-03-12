@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Memoo Sandbox — Visible Chromium browser controlled via Playwright CDP
+# memoo Sandbox — Visible Chromium browser controlled via Playwright CDP
 #
 # Stack:  Xvfb (virtual display) → Chromium → x11vnc → websockify → noVNC
 # The user watches / interacts via a noVNC WebSocket in the frontend.

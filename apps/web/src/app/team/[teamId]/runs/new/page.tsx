@@ -213,7 +213,7 @@ export default function NewRunPage() {
                     <span className="min-w-0">
                       <span className="block font-semibold">{cred.name}</span>
                       <span className="block text-xs text-[var(--app-muted)] font-mono">
-                        {'{{'}{cred.template_key ?? 'vault_credential'}{'}'}{'}'} -> {cred.masked_value}
+                        {`{{${cred.template_key ?? 'vault_credential'}}} -> ${cred.masked_value}`}
                       </span>
                     </span>
                   </label>

@@ -1,6 +1,6 @@
-# Memoo Platform
+# memoo Platform
 
-Full-stack foundation for the Memoo product:
+Full-stack foundation for the memoo product:
 - Frontend: Next.js App Router + Vercel AI SDK
 - Backend: FastAPI + SQLAlchemy
 - Data: PostgreSQL (Docker) or SQLite for local quick start
@@ -83,3 +83,24 @@ Core endpoints:
 - `PATCH /api/automations/{automation_id}`
 - `POST /api/automations/{automation_id}/run`
 - `POST /api/automations/webhook/{webhook_token}`
+
+## Google Cloud deployment
+
+There is now a GCP deployment stack under `infra/terraform/gcp` with:
+
+- `Cloud Run` for `web` and `api`
+- `Cloud SQL` for PostgreSQL
+- `Google Cloud Storage` for evidence assets
+- `Compute Engine` for the visible browser sandbox
+- `Artifact Registry` and `Secret Manager`
+
+Start with:
+
+```bash
+export PROJECT_ID="your-project"
+export REGION="europe-west1"
+./scripts/gcp/bootstrap_tf_state.sh
+./scripts/gcp/deploy.sh
+```
+
+Operational details live in `infra/terraform/gcp/README.md`.

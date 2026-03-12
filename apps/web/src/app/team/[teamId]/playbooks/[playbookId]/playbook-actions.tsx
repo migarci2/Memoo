@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { useToast } from '@/components/toast-provider';
 import { apiGet, apiPatch } from '@/lib/api';
+import { getFolderColorToken } from '@/lib/playbook-folders';
 import type { Playbook, PlaybookFolder } from '@/lib/types';
 
 type Props = {
@@ -25,6 +26,8 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
   });
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const selectedFolder = folders.find(folder => folder.id === form.folderId) ?? null;
+  const selectedFolderToken = getFolderColorToken(selectedFolder?.color);
 
   useEffect(() => {
     apiGet<PlaybookFolder[]>(`/teams/${teamId}/playbook-folders`)
@@ -89,6 +92,9 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
                 <option key={folder.id} value={folder.id}>{folder.name}</option>
               ))}
             </select>
+            <span className="text-xs font-normal text-[var(--app-muted)]">
+              {selectedFolder ? 'This playbook will stay grouped with the selected folder.' : 'No folder means the playbook returns to Inbox.'}
+            </span>
           </label>
           <label className="grid gap-2 text-sm font-medium md:col-span-2">
             Name
@@ -126,6 +132,20 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
             <span className="text-xs text-[var(--app-muted)]">Comma-separated.</span>
           </label>
         </div>
+        {selectedFolder ? (
+          <div
+            className="mt-4 rounded-[1.4rem] border px-4 py-3"
+            style={{
+              borderColor: selectedFolderToken.border,
+              backgroundColor: selectedFolderToken.soft,
+            }}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: selectedFolderToken.text }}>
+              Current folder
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[var(--app-text)]">{selectedFolder.name}</p>
+          </div>
+        ) : null}
         <div className="mt-5 flex gap-3">
           <button
             onClick={save}

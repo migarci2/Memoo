@@ -90,7 +90,7 @@ export default function RegisterPage() {
               <span className="h-2.5 w-2.5 rounded-full bg-[var(--app-sage)]" />
               <span className="col-span-2 h-2.5 rounded-full bg-[var(--app-sand)]" />
             </span>
-            Memoo
+            memoo
           </Link>
           <h1 className="mt-5 text-2xl font-extrabold tracking-tight">Create your workspace</h1>
           <p className="mt-1.5 text-sm text-[var(--app-muted)]">Set up your team and start collaborating.</p>

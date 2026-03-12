@@ -7,6 +7,7 @@ import { CircleNotch } from '@phosphor-icons/react';
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
 import { apiGet, apiPost } from '@/lib/api';
+import { getFolderColorToken } from '@/lib/playbook-folders';
 import type { Playbook, PlaybookFolder } from '@/lib/types';
 
 export default function NewPlaybookPage() {
@@ -22,6 +23,8 @@ export default function NewPlaybookPage() {
   });
   const [folders, setFolders] = useState<PlaybookFolder[]>([]);
   const [saving, setSaving] = useState(false);
+  const selectedFolder = folders.find(folder => folder.id === form.folderId) ?? null;
+  const selectedFolderToken = getFolderColorToken(selectedFolder?.color);
 
   useEffect(() => {
     apiGet<PlaybookFolder[]>(`/teams/${teamId}/playbook-folders`)
@@ -86,7 +89,25 @@ export default function NewPlaybookPage() {
               <option key={folder.id} value={folder.id}>{folder.name}</option>
             ))}
           </select>
+          <span className="text-xs font-normal text-[var(--app-muted)]">
+            {selectedFolder ? 'New playbook will be created directly inside this folder.' : 'Leave empty to send it to Inbox first.'}
+          </span>
         </label>
+
+        {selectedFolder ? (
+          <div
+            className="rounded-[1.4rem] border px-4 py-3"
+            style={{
+              borderColor: selectedFolderToken.border,
+              backgroundColor: selectedFolderToken.soft,
+            }}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: selectedFolderToken.text }}>
+              Selected folder
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[var(--app-text)]">{selectedFolder.name}</p>
+          </div>
+        ) : null}
 
         <label className="grid gap-2 text-sm font-semibold">
           Name

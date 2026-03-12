@@ -25,7 +25,7 @@ const storySteps: Step[] = [
   {
     step: '2',
     title: 'Prepare reusable steps',
-    copy: 'Memoo structures actions into reusable workflow steps and detects variable inputs.',
+    copy: 'memoo structures actions into reusable workflow steps and detects variable inputs.',
     status: 'Step 2 of 4',
     shortTitle: 'Structure and prepare',
     shortCopy: 'Your process becomes repeatable logic your team can trust.',
@@ -166,7 +166,7 @@ export default function HomePage() {
             <span />
             <span />
           </span>
-          <span>Memoo</span>
+          <span>memoo</span>
         </a>
         <nav className={cx('topnav')} aria-label="Primary">
           <a href="#story">How it works</a>
@@ -205,7 +205,7 @@ export default function HomePage() {
           <aside className={cx('hero-preview')}>
             <p className={cx('preview-chip')}>Preview</p>
             <div className={cx('hero-gif-slot')}>
-              {heroGifReady ? <img src="/assets/hero-preview.gif" alt="Memoo hero preview" /> : null}
+              {heroGifReady ? <img src="/assets/hero-preview.gif" alt="memoo hero preview" /> : null}
               {!heroGifReady ? (
                 <div className={cx('gif-fallback')}>
                   <p>Drop your hero GIF preview here.</p>
@@ -267,7 +267,7 @@ export default function HomePage() {
               <p>{currentStep.copy}</p>
 
               <div className={cx('gif-slot')}>
-                {storyGifReady ? <img src="/assets/story-preview.gif" alt="Memoo story preview" /> : null}
+                {storyGifReady ? <img src="/assets/story-preview.gif" alt="memoo story preview" /> : null}
                 {!storyGifReady ? (
                   <div className={cx('gif-fallback')}>
                     <p>Preview area for your product GIF</p>
@@ -280,7 +280,7 @@ export default function HomePage() {
         </section>
 
         <section id="proof" className={cx('proof', 'container')}>
-          <h2>What teams say after switching repetitive workflows to Memoo</h2>
+          <h2>What teams say after switching repetitive workflows to memoo</h2>
           <div className={cx('proof-grid')}>
             <article>
               <img src="https://i.pravatar.cc/96?img=12" alt="Ariana Voss" />
@@ -332,7 +332,7 @@ export default function HomePage() {
                 <span />
                 <span />
               </span>
-              <span>Memoo</span>
+              <span>memoo</span>
             </a>
             <p>Operational playbooks for recurring web workflows.</p>
           </div>
@@ -360,7 +360,7 @@ export default function HomePage() {
         </div>
 
         <div className={cx('footer-bottom')}>
-          <p>(c) 2026 Memoo, Inc.</p>
+          <p>(c) 2026 memoo, Inc.</p>
           <div>
             <a href="#">Privacy</a>
             <a href="#">Terms</a>

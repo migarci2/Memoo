@@ -1,7 +1,7 @@
-import { API_BASE_URL, API_BASE_URL_SERVER } from '@/lib/config';
+import { getApiBaseUrl, getApiBaseUrlServer } from '@/lib/config';
 
 function baseUrl() {
-  return typeof window === 'undefined' ? API_BASE_URL_SERVER : API_BASE_URL;
+  return typeof window === 'undefined' ? getApiBaseUrlServer() : getApiBaseUrl();
 }
 
 export async function apiGet<T>(path: string): Promise<T> {

@@ -1,0 +1,21 @@
+project_id = "my-gcp-project"
+region     = "europe-west1"
+zone       = "europe-west1-b"
+
+api_image     = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-api:latest"
+web_image     = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-web:latest"
+sandbox_image = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-sandbox:latest"
+
+# If you leave this empty, Terraform will expose the sandbox via
+# https://<reserved-ip>.sslip.io and Caddy will request TLS automatically.
+sandbox_domain = ""
+
+# Browser traffic normally goes through the Next.js proxy, so this only matters
+# if something talks to the API directly from a browser.
+api_cors_origins = ["http://localhost:3000"]
+
+google_api_key             = "replace-me"
+next_public_gemini_api_key = ""
+
+gemini_model                  = "gemini-2.5-flash"
+next_public_gemini_live_model = "gemini-2.5-flash-native-audio-preview-12-2025"

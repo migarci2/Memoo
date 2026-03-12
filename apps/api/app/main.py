@@ -11,7 +11,7 @@ from app.services.storage import ensure_bucket
 
 settings = get_settings()
 
-app = FastAPI(title='Memoo API', version='0.1.0')
+app = FastAPI(title='memoo API', version='0.1.0')
 
 app.add_middleware(
     CORSMiddleware,

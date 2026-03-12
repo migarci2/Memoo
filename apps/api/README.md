@@ -1,4 +1,4 @@
-# Memoo API (FastAPI)
+# memoo API (FastAPI)
 
 ## Run
 

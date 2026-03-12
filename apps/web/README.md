@@ -1,6 +1,6 @@
-# Memoo Web (Next.js)
+# memoo Web (Next.js)
 
-Frontend app for Memoo.
+Frontend app for memoo.
 
 - `/`: public landing page
 - `/login`: login

@@ -686,7 +686,7 @@ export function StepFlowEditor({ playbookId, teamId, initialSteps, versionNumber
               </button>
               <button onClick={saveNewVersion} disabled={saving || !dirty}
                 className="btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm disabled:opacity-40">
-                {saving ? <CircleNotch size={14} className="animate-spin" /> : <FloppyDisk size={14} weight="bold" />}
+                {saving ? <span className="inline-flex animate-spin"><CircleNotch size={14} /></span> : <FloppyDisk size={14} weight="bold" />}
                 {saving ? 'Saving…' : 'Save version'}
               </button>
             </>
@@ -1155,12 +1155,12 @@ function EditSidebar({ node, updateStep, removeStep, moveStep, addToBranch, clos
               <div className="flex gap-2">
                 <button onClick={() => addToBranch(node._key, 'then')}
                   className="flex-1 rounded-lg border border-dashed border-[rgba(74,140,97,0.3)] bg-[rgba(74,140,97,0.05)] px-3 py-2 text-center text-xs font-semibold text-[#4a8c61] transition-colors hover:bg-[rgba(74,140,97,0.12)]">
-                  <Plus size={10} weight="bold" className="inline mr-1" />
+                  <span className="mr-1 inline-flex"><Plus size={10} weight="bold" /></span>
                   Yes ({node.then_branch.length})
                 </button>
                 <button onClick={() => addToBranch(node._key, 'else')}
                   className="flex-1 rounded-lg border border-dashed border-[rgba(200,60,60,0.2)] bg-[rgba(200,60,60,0.04)] px-3 py-2 text-center text-xs font-semibold text-[#c04040] transition-colors hover:bg-[rgba(200,60,60,0.10)]">
-                  <Plus size={10} weight="bold" className="inline mr-1" />
+                  <span className="mr-1 inline-flex"><Plus size={10} weight="bold" /></span>
                   No ({node.else_branch.length})
                 </button>
               </div>
@@ -1185,7 +1185,7 @@ function EditSidebar({ node, updateStep, removeStep, moveStep, addToBranch, clos
             <SideField label="Loop body">
               <button onClick={() => addToBranch(node._key, 'body')}
                 className="w-full rounded-lg border border-dashed border-[rgba(46,125,140,0.3)] bg-[rgba(46,125,140,0.05)] px-3 py-2 text-center text-xs font-semibold text-[#2e7d8c] transition-colors hover:bg-[rgba(46,125,140,0.12)]">
-                <Plus size={10} weight="bold" className="inline mr-1" />
+                <span className="mr-1 inline-flex"><Plus size={10} weight="bold" /></span>
                 Add step ({node.loop_body.length} in body)
               </button>
             </SideField>

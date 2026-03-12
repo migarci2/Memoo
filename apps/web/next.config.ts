@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
   // any host (needed when running inside Docker with a mapped port).
   allowedDevOrigins: ['localhost', '127.0.0.1'],
 
-  // Silence the Turbopack / webpack config warning in Next.js 16+.
   turbopack: {},
 
   // Enable filesystem polling for Docker bind-mounts (inotify may
