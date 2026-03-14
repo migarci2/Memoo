@@ -53,8 +53,24 @@ class Settings(BaseSettings):
     # Sandbox (remote browser)
     sandbox_cdp_url: str = 'http://sandbox:9223'
 
+    # Stagehand autonomous browser actions.
+    stagehand_enabled: bool = True
+    stagehand_service_url: str = 'http://agent:8787'
+    stagehand_model: str = ''
+    stagehand_max_steps: int = 20
+    stagehand_request_timeout_seconds: float = 90.0
+    stagehand_navigation_timeout_ms: int = 20_000
+    stagehand_wait_between_actions_ms: int = 0
+    stagehand_highlight_cursor: bool = True
+
     @model_validator(mode='after')
     def populate_database_url(self) -> 'Settings':
+        self.stagehand_service_url = self.stagehand_service_url.rstrip('/')
+        if not self.stagehand_model:
+            self.stagehand_model = self.gemini_model
+        if self.stagehand_model and '/' not in self.stagehand_model:
+            self.stagehand_model = f'google/{self.stagehand_model}'
+
         if self.database_url:
             return self
 
@@ -74,6 +90,7 @@ class Settings(BaseSettings):
             f'postgresql+asyncpg://{quoted_user}:{quoted_password}@{self.db_host}:{self.db_port}/'
             f'{quoted_name}'
         )
+
         return self
 
 

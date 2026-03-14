@@ -97,16 +97,19 @@ chromium \
   --no-first-run \
   --disable-gpu \
   --no-sandbox \
+  --test-type \
+  --disable-infobars \
   --disable-dev-shm-usage \
   --disable-background-timer-throttling \
   --disable-renderer-backgrounding \
   --disable-backgrounding-occluded-windows \
   --remote-debugging-port="${CDP_PORT}" \
   --remote-debugging-address=0.0.0.0 \
+  --remote-allow-origins=* \
   --window-size=1280,800 \
   --start-maximized \
   --user-data-dir=/tmp/chromium-profile \
-  "about:blank" &
+  "http://127.0.0.1:8585/" &
 register_child "$!"
 wait_for_http "http://127.0.0.1:${CDP_PORT}/json/version" "Chromium DevTools" 40 0.5
 
@@ -118,9 +121,17 @@ echo "[sandbox] Starting socat forwarder 0.0.0.0:${CDP_LISTEN} -> localhost:${CD
 socat TCP-LISTEN:${CDP_LISTEN},fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:${CDP_PORT} &
 register_child "$!"
 
+echo "[sandbox] Forwarding localhost:3000 -> web:3000 for in-browser app access..."
+socat TCP-LISTEN:3000,fork,reuseaddr,bind=127.0.0.1 TCP:web:3000 &
+register_child "$!"
+
+echo "[sandbox] Forwarding localhost:8000 -> api:8000 for in-browser API access..."
+socat TCP-LISTEN:8000,fork,reuseaddr,bind=127.0.0.1 TCP:api:8000 &
+register_child "$!"
+
 echo "[sandbox] Starting x11vnc on :${VNC_PORT}..."
 x11vnc -display :99 -nopw -listen 0.0.0.0 -rfbport "${VNC_PORT}" \
-  -shared -forever -ncache 10 -ncache_cr &
+  -shared -forever &
 register_child "$!"
 wait_for_tcp "${VNC_PORT}" "x11vnc" 20 0.5
 

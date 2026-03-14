@@ -52,7 +52,6 @@ type BoardColumn = {
 const STATUS_META: Record<Playbook['status'], string> = {
   active: 'border-[rgba(123,155,134,0.38)] bg-[rgba(123,155,134,0.14)] text-[#335443]',
   draft: 'border-[rgba(95,119,132,0.32)] bg-[rgba(95,119,132,0.12)] text-[#3f5e6f]',
-  published: 'border-[rgba(61,132,162,0.34)] bg-[rgba(61,132,162,0.13)] text-[#1d5368]',
   archived: 'border-[rgba(191,155,106,0.36)] bg-[rgba(191,155,106,0.14)] text-[#7d5d31]',
 };
 
@@ -60,7 +59,6 @@ const STATUS_FILTERS: Array<{ id: 'all' | Playbook['status']; label: string }> =
   { id: 'all', label: 'All' },
   { id: 'active', label: 'Active' },
   { id: 'draft', label: 'Draft' },
-  { id: 'published', label: 'Published' },
   { id: 'archived', label: 'Archived' },
 ];
 
@@ -74,9 +72,8 @@ const BOARD_FILTERS = [
 function sortPlaybooks(playbooks: Playbook[]) {
   const statusRank: Record<Playbook['status'], number> = {
     active: 0,
-    published: 1,
-    draft: 2,
-    archived: 3,
+    draft: 1,
+    archived: 2,
   };
 
   return [...playbooks].sort((a, b) => {
@@ -175,7 +172,7 @@ export function PlaybookOrganizer({
   const uncategorizedCount = playbooks.filter(playbook => !playbook.folder_id).length;
   const categorizedCount = playbooks.length - uncategorizedCount;
   const activeCount = playbooks.filter(
-    playbook => playbook.status === 'active' || playbook.status === 'published',
+    playbook => playbook.status === 'active',
   ).length;
   const emptyFolderCount = folders.filter(
     folder => !playbooks.some(playbook => playbook.folder_id === folder.id),
@@ -193,7 +190,7 @@ export function PlaybookOrganizer({
       readyItems: playbooks.filter(
         playbook =>
           !playbook.folder_id &&
-          (playbook.status === 'active' || playbook.status === 'published'),
+          playbook.status === 'active',
       ).length,
       tone: 'from-[#eff5f7] via-white to-[#f7f4ed]',
       accent: '#4e8ca7',
@@ -215,7 +212,7 @@ export function PlaybookOrganizer({
         items: visiblePlaybooks.filter(playbook => playbook.folder_id === folder.id),
         totalItems: folderItems.length,
         readyItems: folderItems.filter(
-          playbook => playbook.status === 'active' || playbook.status === 'published',
+          playbook => playbook.status === 'active',
         ).length,
         tone: token.tone,
         accent: token.solid,
@@ -578,7 +575,7 @@ export function PlaybookOrganizer({
           {
             label: 'Ready to run',
             value: activeCount,
-            desc: 'Active or published playbooks across the workspace',
+            desc: 'Active playbooks across the workspace',
           },
           {
             label: 'Board lanes',

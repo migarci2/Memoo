@@ -17,7 +17,7 @@ export default async function PlaybooksPage({ params }: Props) {
     apiGet<PlaybookFolder[]>(`/teams/${teamId}/playbook-folders`),
   ]);
 
-  const active = playbooks.filter(playbook => playbook.status === 'active' || playbook.status === 'published').length;
+  const active = playbooks.filter(playbook => playbook.status === 'active').length;
   const inbox = playbooks.filter(playbook => !playbook.folder_id).length;
 
   return (
@@ -30,7 +30,7 @@ export default async function PlaybooksPage({ params }: Props) {
         {[
           { label: 'Playbooks', value: playbooks.length, desc: 'Workflows in this workspace' },
           { label: 'Folders', value: folders.length, desc: 'Custom lanes for organization' },
-          { label: 'Ready', value: active, desc: 'Active or published playbooks' },
+          { label: 'Ready', value: active, desc: 'Playbooks ready to run' },
           { label: 'Inbox', value: inbox, desc: 'Playbooks still uncategorized' },
         ].map(kpi => (
           <article key={kpi.label} className="panel p-5">

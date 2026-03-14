@@ -91,6 +91,7 @@ services:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       SANDBOX_CDP_URL: http://sandbox:9223
+      STAGEHAND_SERVICE_URL: http://agent:8787
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,6 +101,38 @@ services:
         condition: service_completed_successfully
       sandbox:
         condition: service_healthy
+      agent:
+        condition: service_healthy
+
+  agent:
+    build:
+      context: ./apps/agent
+      dockerfile: Dockerfile
+    container_name: memoo-agent
+    restart: unless-stopped
+    volumes:
+      - ./apps/agent:/app
+      - /app/node_modules
+    environment:
+      PORT: 8787
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      STAGEHAND_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+    depends_on:
+      sandbox:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:8787/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   sandbox:
     build:

@@ -44,6 +44,11 @@ async def on_startup() -> None:
         )
         await conn.execute(
             __import__('sqlalchemy').text(
+                "ALTER TABLE runs ALTER COLUMN playbook_id DROP NOT NULL"
+            )
+        )
+        await conn.execute(
+            __import__('sqlalchemy').text(
                 "ALTER TABLE playbook_automations ADD COLUMN IF NOT EXISTS selected_vault_credential_ids JSON DEFAULT '[]'::json"
             )
         )

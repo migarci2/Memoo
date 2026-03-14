@@ -5,15 +5,17 @@ import io
 from datetime import timedelta
 from uuid import uuid4
 
-from google.cloud import storage as gcs_storage
 from miniopy_async import Minio
 
 from app.core.config import get_settings
 
+# Lazy import for GCS to avoid dependency when using MinIO
+gcs_storage = None
+
 settings = get_settings()
 
 _client: Minio | None = None
-_gcs_client: gcs_storage.Client | None = None
+_gcs_client = None  # type: ignore
 
 
 def get_minio_client() -> Minio:
@@ -28,8 +30,11 @@ def get_minio_client() -> Minio:
     return _client
 
 
-def get_gcs_client() -> gcs_storage.Client:
-    global _gcs_client
+def get_gcs_client():
+    """Get GCS client with lazy import to avoid dependency when using MinIO."""
+    global _gcs_client, gcs_storage
+    if gcs_storage is None:
+        from google.cloud import storage as gcs_storage
     if _gcs_client is None:
         if settings.gcs_project_id:
             _gcs_client = gcs_storage.Client(project=settings.gcs_project_id)

@@ -192,7 +192,10 @@ class Run(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     team_id: Mapped[str] = mapped_column(ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
-    playbook_id: Mapped[str] = mapped_column(ForeignKey('playbooks.id', ondelete='CASCADE'), nullable=False)
+    playbook_id: Mapped[str | None] = mapped_column(
+        ForeignKey('playbooks.id', ondelete='SET NULL'),
+        nullable=True,
+    )
     playbook_version_id: Mapped[str | None] = mapped_column(ForeignKey('playbook_versions.id', ondelete='SET NULL'), nullable=True)
     status: Mapped[RunStatus] = mapped_column(Enum(RunStatus), default=RunStatus.PENDING)
     trigger_type: Mapped[str] = mapped_column(String(30), default='csv_batch')

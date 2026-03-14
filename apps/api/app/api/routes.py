@@ -904,7 +904,11 @@ async def sandbox_status() -> SandboxStatusOut:
     settings = get_settings()
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f'{settings.sandbox_cdp_url}/json/version', timeout=3)
+            resp = await client.get(
+                f'{settings.sandbox_cdp_url}/json/version',
+                timeout=3,
+                headers={"Host": "localhost"},
+            )
             resp.raise_for_status()
         return SandboxStatusOut(
             healthy=True,
@@ -1122,7 +1126,7 @@ async def create_run(
         input_source=payload.input_source,
         selected_vault_credential_ids=payload.selected_vault_credential_ids,
         use_sandbox=payload.use_sandbox,
-        trigger_type='csv_batch',
+        trigger_type='browser_agent' if not payload.playbook_id else 'csv_batch',
     )
     enqueue_run_execution(run.id)
 
@@ -1139,8 +1143,11 @@ async def get_run_detail(run_id: str, db: AsyncSession = Depends(get_db)) -> Run
     if not run:
         raise HTTPException(status_code=404, detail='Run not found.')
 
-    playbook = await db.get(Playbook, run.playbook_id)
-    playbook_name = playbook.name if playbook else 'Unknown'
+    playbook_name = 'Browser agent'
+    if run.playbook_id:
+        playbook = await db.get(Playbook, run.playbook_id)
+        if playbook:
+            playbook_name = playbook.name
 
     items_out = []
     events_map: dict[str, list[RunEventOut]] = {}

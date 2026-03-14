@@ -26,7 +26,7 @@ export type Playbook = {
   folder_id?: string | null;
   name: string;
   description?: string | null;
-  status: 'draft' | 'active' | 'published' | 'archived';
+  status: 'draft' | 'active' | 'archived';
   tags: string[];
   created_at: string;
 };
@@ -211,7 +211,7 @@ export type PlaybookAutomationUpdateInput = {
 export type Run = {
   id: string;
   team_id: string;
-  playbook_id: string;
+  playbook_id?: string | null;
   playbook_version_id?: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
   trigger_type: string;

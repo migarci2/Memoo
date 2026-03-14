@@ -45,11 +45,30 @@ def _extract_step_tokens(step: dict) -> set[str]:
     return tokens
 
 
+def _build_direct_agent_steps(row_data: dict) -> list[dict]:
+    brief = str((row_data or {}).get('agent_brief') or '').strip()
+    if not brief:
+        raise HTTPException(
+            status_code=400,
+            detail='Browser agent runs require a non-empty agent_brief.',
+        )
+
+    return [{
+        'sequence': 1,
+        'title': brief[:220],
+        'step_type': 'action',
+        'target_url': None,
+        'selector': None,
+        'variables': {},
+        'guardrails': {'verify': 'User goal completed'},
+    }]
+
+
 async def create_run_record(
     db: AsyncSession,
     *,
     team_id: str,
-    playbook_id: str,
+    playbook_id: str | None,
     input_rows: list[dict],
     input_source: str | None,
     selected_vault_credential_ids: list[str] | None,
@@ -59,16 +78,6 @@ async def create_run_record(
     team = await db.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail='Team not found.')
-
-    playbook = await db.scalar(
-        select(Playbook)
-        .where(Playbook.id == playbook_id)
-        .options(selectinload(Playbook.versions).selectinload(PlaybookVersion.steps))
-    )
-    if not playbook:
-        raise HTTPException(status_code=404, detail='Playbook not found.')
-    if playbook.team_id != team_id:
-        raise HTTPException(status_code=400, detail='Playbook does not belong to this team.')
 
     selected_ids = list(dict.fromkeys(selected_vault_credential_ids or []))
     if selected_ids:
@@ -81,13 +90,32 @@ async def create_run_record(
         if len(rows) != len(set(selected_ids)):
             raise HTTPException(status_code=400, detail='Some selected vault credentials are invalid.')
 
+    playbook: Playbook | None = None
+    if playbook_id:
+        playbook = await db.scalar(
+            select(Playbook)
+            .where(Playbook.id == playbook_id)
+            .options(selectinload(Playbook.versions).selectinload(PlaybookVersion.steps))
+        )
+        if not playbook:
+            raise HTTPException(status_code=404, detail='Playbook not found.')
+        if playbook.team_id != team_id:
+            raise HTTPException(status_code=400, detail='Playbook does not belong to this team.')
+    else:
+        has_agent_brief = any(str((row or {}).get('agent_brief') or '').strip() for row in input_rows)
+        if not has_agent_brief:
+            raise HTTPException(
+                status_code=400,
+                detail='Select a playbook or provide instructions for the browser agent.',
+            )
+
     latest_version = None
-    if playbook.versions:
+    if playbook and playbook.versions:
         latest_version = sorted(playbook.versions, key=lambda v: v.version_number)[-1]
 
     run = Run(
         team_id=team_id,
-        playbook_id=playbook_id,
+        playbook_id=playbook.id if playbook else None,
         playbook_version_id=latest_version.id if latest_version else None,
         status=RunStatus.PENDING,
         trigger_type=trigger_type,
@@ -132,8 +160,8 @@ async def execute_run(run_id: str) -> None:
             return
 
         try:
-            # Load playbook steps
-            steps: list[dict] = []
+            # Load playbook steps if this run is bound to a playbook.
+            playbook_steps: list[dict] = []
             if run.playbook_version_id:
                 version = await db.scalar(
                     select(PlaybookVersion)
@@ -142,7 +170,7 @@ async def execute_run(run_id: str) -> None:
                 )
                 if version:
                     for s in sorted(version.steps, key=lambda s: s.sequence):
-                        steps.append({
+                        playbook_steps.append({
                             'sequence': s.sequence,
                             'title': s.title,
                             'step_type': s.step_type,
@@ -175,8 +203,8 @@ async def execute_run(run_id: str) -> None:
                 vault_name_by_key[key] = cred.name
 
             step_credential_usage: dict[int, set[str]] = {}
-            if vault_name_by_key and steps:
-                for step in steps:
+            if vault_name_by_key and playbook_steps:
+                for step in playbook_steps:
                     seq = int(step.get('sequence') or 0)
                     used_names = {
                         vault_name_by_key[token]
@@ -200,6 +228,7 @@ async def execute_run(run_id: str) -> None:
 
                 row_data = dict(item.input_payload or {})
                 row_data.update(vault_values_by_key)
+                steps = playbook_steps or _build_direct_agent_steps(row_data)
 
                 if run.use_sandbox:
                     step_results = await execute_in_sandbox(
@@ -239,7 +268,7 @@ async def execute_run(run_id: str) -> None:
                     if result['status'] == 'failed':
                         item_failed = True
 
-                if selected_creds and not used_credential_names_for_item:
+                if selected_creds and playbook_steps and not used_credential_names_for_item:
                     item_failed = True
                     db.add(RunEvent(
                         run_item_id=item.id,

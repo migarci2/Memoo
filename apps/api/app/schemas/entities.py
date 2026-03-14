@@ -4,6 +4,12 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
+def normalize_playbook_status(status: str | None) -> str | None:
+    if status == 'published':
+        return 'active'
+    return status
+
+
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
 class TeamOnboardingCreate(BaseModel):
@@ -152,6 +158,11 @@ class PlaybookOut(BaseModel):
     tags: list[str]
     created_at: datetime
 
+    @model_validator(mode='after')
+    def normalize_status(self) -> 'PlaybookOut':
+        self.status = normalize_playbook_status(self.status) or 'draft'
+        return self
+
 
 class PlaybookUpdate(BaseModel):
     folder_id: str | None = None
@@ -159,6 +170,11 @@ class PlaybookUpdate(BaseModel):
     description: str | None = None
     status: str | None = None
     tags: list[str] | None = None
+
+    @model_validator(mode='after')
+    def normalize_status(self) -> 'PlaybookUpdate':
+        self.status = normalize_playbook_status(self.status)
+        return self
 
 
 class PlaybookVersionCreate(BaseModel):
@@ -303,7 +319,7 @@ class PlaybookAutomationOut(BaseModel):
 # ── Run (batch execution) ───────────────────────────────────────────────────
 
 class RunCreate(BaseModel):
-    playbook_id: str
+    playbook_id: str | None = None
     input_rows: list[dict] = Field(default_factory=list)
     input_source: str | None = None
     selected_vault_credential_ids: list[str] = Field(default_factory=list)
@@ -315,7 +331,7 @@ class RunOut(BaseModel):
 
     id: str
     team_id: str
-    playbook_id: str
+    playbook_id: str | None
     playbook_version_id: str | None
     status: str
     trigger_type: str
