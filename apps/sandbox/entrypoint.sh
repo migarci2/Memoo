@@ -1,6 +1,14 @@
 #!/bin/bash
 set -Eeuo pipefail
 
+SANDBOX_USER="sandbox"
+SANDBOX_HOME="/home/${SANDBOX_USER}"
+export HOME="${HOME:-/root}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-sandbox}"
+mkdir -p "${SANDBOX_HOME}/.config" "${SANDBOX_HOME}/.cache" "${XDG_RUNTIME_DIR}"
+chown -R "${SANDBOX_USER}:${SANDBOX_USER}" "${SANDBOX_HOME}" "${XDG_RUNTIME_DIR}"
+chmod 700 "${XDG_RUNTIME_DIR}"
+
 child_pids=()
 
 cleanup() {
@@ -92,26 +100,48 @@ Xvfb :99 -screen 0 "${RESOLUTION}" -ac +extension GLX +render -noreset &
 register_child "$!"
 wait_for_process "Xvfb :99" "Xvfb"
 
+echo "[sandbox] Starting Openbox window manager..."
+openbox >/tmp/openbox.log 2>&1 &
+register_child "$!"
+wait_for_process "openbox" "Openbox"
+
 echo "[sandbox] Starting Chromium with remote debugging on :${CDP_PORT}..."
-chromium \
-  --no-first-run \
-  --disable-gpu \
-  --no-sandbox \
-  --test-type \
-  --disable-infobars \
-  --disable-dev-shm-usage \
-  --disable-background-timer-throttling \
-  --disable-renderer-backgrounding \
-  --disable-backgrounding-occluded-windows \
-  --remote-debugging-port="${CDP_PORT}" \
-  --remote-debugging-address=0.0.0.0 \
-  --remote-allow-origins=* \
-  --window-size=1280,800 \
-  --start-maximized \
-  --user-data-dir=/tmp/chromium-profile \
-  "http://127.0.0.1:8585/" &
+runuser -u "${SANDBOX_USER}" -- env \
+  HOME="${SANDBOX_HOME}" \
+  XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+  DISPLAY="${DISPLAY}" \
+  chromium \
+    --no-first-run \
+    --disable-gpu \
+    --test-type \
+    --disable-infobars \
+    --disable-dev-shm-usage \
+    --disable-background-timer-throttling \
+    --disable-renderer-backgrounding \
+    --disable-backgrounding-occluded-windows \
+    --remote-debugging-port="${CDP_PORT}" \
+    --remote-debugging-address=0.0.0.0 \
+    --remote-allow-origins=* \
+    --window-position=0,0 \
+    --window-size=1366,768 \
+    --start-maximized \
+    --user-data-dir="${SANDBOX_HOME}/chromium-profile" \
+    "http://127.0.0.1:8585/" &
 register_child "$!"
 wait_for_http "http://127.0.0.1:${CDP_PORT}/json/version" "Chromium DevTools" 40 0.5
+
+for _ in $(seq 1 20); do
+  if xdotool search --onlyvisible --class chromium >/tmp/chromium-windows 2>/dev/null; then
+    while read -r window_id; do
+      [ -n "${window_id}" ] || continue
+      xdotool windowmove "${window_id}" 0 0 >/dev/null 2>&1 || true
+      xdotool windowsize "${window_id}" 100% 100% >/dev/null 2>&1 || true
+      wmctrl -i -r "${window_id}" -b add,maximized_vert,maximized_horz >/dev/null 2>&1 || true
+    done </tmp/chromium-windows
+    break
+  fi
+  sleep 0.5
+done
 
 # Chromium may ignore --remote-debugging-address and bind to 127.0.0.1 only.
 # Use socat to forward 0.0.0.0:CDP_PORT -> 127.0.0.1:CDP_PORT so other

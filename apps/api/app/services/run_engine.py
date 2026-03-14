@@ -45,25 +45,6 @@ def _extract_step_tokens(step: dict) -> set[str]:
     return tokens
 
 
-def _build_direct_agent_steps(row_data: dict) -> list[dict]:
-    brief = str((row_data or {}).get('agent_brief') or '').strip()
-    if not brief:
-        raise HTTPException(
-            status_code=400,
-            detail='Browser agent runs require a non-empty agent_brief.',
-        )
-
-    return [{
-        'sequence': 1,
-        'title': brief[:220],
-        'step_type': 'action',
-        'target_url': None,
-        'selector': None,
-        'variables': {},
-        'guardrails': {'verify': 'User goal completed'},
-    }]
-
-
 async def create_run_record(
     db: AsyncSession,
     *,
@@ -102,12 +83,10 @@ async def create_run_record(
         if playbook.team_id != team_id:
             raise HTTPException(status_code=400, detail='Playbook does not belong to this team.')
     else:
-        has_agent_brief = any(str((row or {}).get('agent_brief') or '').strip() for row in input_rows)
-        if not has_agent_brief:
-            raise HTTPException(
-                status_code=400,
-                detail='Select a playbook or provide instructions for the browser agent.',
-            )
+        raise HTTPException(
+            status_code=400,
+            detail='Select a playbook before starting a run.',
+        )
 
     latest_version = None
     if playbook and playbook.versions:
@@ -228,7 +207,9 @@ async def execute_run(run_id: str) -> None:
 
                 row_data = dict(item.input_payload or {})
                 row_data.update(vault_values_by_key)
-                steps = playbook_steps or _build_direct_agent_steps(row_data)
+                if not playbook_steps:
+                    raise RuntimeError('Run has no playbook steps to execute.')
+                steps = playbook_steps
 
                 if run.use_sandbox:
                     step_results = await execute_in_sandbox(

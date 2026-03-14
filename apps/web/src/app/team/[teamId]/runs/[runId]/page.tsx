@@ -86,11 +86,6 @@ function latestRunEvent(eventsByItem: Record<string, RunEvent[]>): RunEvent | nu
   return latest;
 }
 
-function isDirectBrowserAgentRun(playbookName: string): boolean {
-  const normalized = playbookName.trim().toLowerCase();
-  return normalized === 'autonomous browser agent' || normalized === 'browser agent';
-}
-
 export default function RunDetailPage() {
   const { teamId, runId } = useParams<{ teamId: string; runId: string }>();
   const router = useRouter();
@@ -141,7 +136,6 @@ export default function RunDetailPage() {
   const sandboxNovncUrl = getSandboxNovncUrl();
   const agentSnapshot = buildAgentSnapshot(items);
   const lastEvent = latestRunEvent(events_by_item);
-  const directBrowserAgentRun = isDirectBrowserAgentRun(playbook_name || '');
   const agentStatusTone =
     run.status === 'failed'
       ? 'border-[rgba(176,64,64,0.18)] bg-[rgba(176,64,64,0.08)] text-[#8b3a3a]'
@@ -150,14 +144,14 @@ export default function RunDetailPage() {
         : 'border-[rgba(15,103,143,0.2)] bg-[rgba(15,103,143,0.08)] text-[var(--app-blue)]';
   const agentStatusLabel =
     run.status === 'failed'
-      ? 'Agent needs attention'
+      ? 'Run needs attention'
       : run.status === 'completed'
-        ? 'Agent finished this run'
-        : 'Gemini agent is driving this session';
+        ? 'Run finished'
+        : 'Playbook is running live';
   const agentSummary =
     agentSnapshot.agentBrief
     || agentSnapshot.agentContextText
-    || 'No extra note was provided. The agent is relying on the playbook plus any secure credentials selected for this run.';
+    || 'No extra note was provided. This run is using the playbook plus any secure credentials selected for it.';
 
   return (
     <PlatformShell teamId={teamId}>
@@ -172,13 +166,11 @@ export default function RunDetailPage() {
       <div className="mb-6">
         <p className="landing-kicker">Run detail</p>
         <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
-          {directBrowserAgentRun ? 'Browser agent run' : playbook_name || 'Run'} #{run.id.slice(0, 8)}
+          {playbook_name || 'Playbook run'} #{run.id.slice(0, 8)}
         </h1>
         {run.use_sandbox && (
           <p className="mt-2 max-w-[72ch] text-sm text-[var(--app-muted)]">
-            {directBrowserAgentRun
-              ? 'This is a direct Gemini browser agent session. The browser below is the exact live tab the agent is controlling.'
-              : 'This run has a visible Gemini agent attached. The browser below is the same live session the agent uses for autonomous actions.'}
+            This run stays attached to the live sandbox so you can watch the playbook repeat its actions in the same browser session.
           </p>
         )}
       </div>
@@ -211,16 +203,16 @@ export default function RunDetailPage() {
                   </span>
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--app-muted)]">
-                      Agent session
+                      Playbook session
                     </p>
                     <h2 className="mt-1 text-2xl font-extrabold tracking-tight">
-                      Gemini is not separate from the sandbox
+                      The preview is the run
                     </h2>
                   </div>
                 </div>
                 <p className="mt-4 max-w-[68ch] text-sm leading-6 text-[var(--app-muted)]">
-                  Every autonomous step runs against the exact browser session you see below.
-                  You can watch it work, take over manually, or inspect what context it received.
+                  Every listed playbook step runs against the exact browser session you see below.
+                  You can watch the navigation, clicks, form input, and verification happen live.
                 </p>
               </div>
 
@@ -241,7 +233,7 @@ export default function RunDetailPage() {
                   Visible sandbox browser
                 </p>
                 <p className="mt-1 text-xs leading-5 text-[var(--app-muted)]">
-                  Manual interaction and agent actions happen in the same tab.
+                  The playbook and your preview stay on the same browser tab.
                 </p>
               </div>
               <div className="rounded-2xl border border-white/60 bg-white/75 p-4 backdrop-blur">
@@ -263,7 +255,7 @@ export default function RunDetailPage() {
                   {lastEvent ? lastEvent.step_title : 'No verification yet'}
                 </p>
                 <p className="mt-1 text-xs leading-5 text-[var(--app-muted)]">
-                  {lastEvent ? formatDateTime(lastEvent.created_at) : 'The agent has not produced step logs yet.'}
+                  {lastEvent ? formatDateTime(lastEvent.created_at) : 'The run has not produced step logs yet.'}
                 </p>
               </div>
             </div>
@@ -279,7 +271,7 @@ export default function RunDetailPage() {
                   Agent context
                 </p>
                 <h2 className="mt-1 text-lg font-extrabold tracking-tight">
-                  What this run told Gemini
+                  Run context
                 </h2>
               </div>
             </div>
@@ -343,7 +335,7 @@ export default function RunDetailPage() {
               Live sandbox
             </h2>
             <span className="rounded-full bg-[rgba(15,103,143,0.08)] px-2.5 py-1 text-[11px] font-bold text-[var(--app-blue)]">
-              Gemini attached
+              Playbook attached
             </span>
             {run.status === 'running' && (
               <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[rgba(76,175,80,0.15)] px-2.5 py-0.5 text-[11px] font-bold text-[#4a8c61]">
@@ -352,7 +344,10 @@ export default function RunDetailPage() {
               </span>
             )}
           </div>
-          <div className="panel overflow-hidden" style={{ aspectRatio: '16/10' }}>
+          <div
+            className="panel overflow-hidden rounded-[28px] border border-[rgba(15,23,42,0.08)] bg-[#0f1720] shadow-[0_28px_80px_-36px_rgba(15,23,42,0.65)]"
+            style={{ height: 'clamp(32rem, 72vh, 58rem)' }}
+          >
             <iframe
               src={sandboxNovncUrl}
               className="h-full w-full border-0"

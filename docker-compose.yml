@@ -140,11 +140,16 @@ services:
       dockerfile: Dockerfile
     container_name: memoo-sandbox
     restart: unless-stopped
+    shm_size: 1gb
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp=unconfined
     ports:
       - '${SANDBOX_NOVNC_PORT:-6080}:6080'
       - '${SANDBOX_CDP_PORT:-9222}:9223'
     environment:
-      RESOLUTION: '1280x800x24'
+      RESOLUTION: '1366x768x24'
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8585/health']
       interval: 5s
@@ -168,7 +173,7 @@ services:
       - /app/.next
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
-      NEXT_PUBLIC_SANDBOX_NOVNC_URL: http://localhost:${SANDBOX_NOVNC_PORT:-6080}/vnc.html?autoconnect=true&resize=scale
+      NEXT_PUBLIC_SANDBOX_NOVNC_URL: http://localhost:${SANDBOX_NOVNC_PORT:-6080}/vnc.html?autoconnect=true&resize=scale&reconnect=true&show_dot=false
       NEXT_PUBLIC_GEMINI_API_KEY: ${NEXT_PUBLIC_GEMINI_API_KEY:-}
       NEXT_PUBLIC_GEMINI_LIVE_MODEL: ${NEXT_PUBLIC_GEMINI_LIVE_MODEL:-gemini-2.5-flash-native-audio-preview-12-2025}
       API_BASE_URL_INTERNAL: http://api:8000/api

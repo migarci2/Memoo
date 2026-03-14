@@ -18,6 +18,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Virtual display
     xvfb \
+    # Lightweight window manager so Chromium can maximize correctly
+    openbox \
     # VNC server
     x11vnc \
     # noVNC + websockify
@@ -27,8 +29,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # TCP forwarder (Chromium ignores --remote-debugging-address in newer versions)
     socat \
     # Utils
-    procps curl xdg-utils fonts-liberation fonts-noto-color-emoji \
+    procps curl xdg-utils fonts-liberation fonts-noto-color-emoji util-linux xdotool wmctrl \
     && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --system sandbox && useradd --system --create-home --gid sandbox sandbox \
+    && install -d -m 700 -o sandbox -g sandbox /home/sandbox/.config /home/sandbox/.cache /tmp/runtime-sandbox
 
 # ── Supervisor-like start script ─────────────────────────────────────────────
 COPY entrypoint.sh /entrypoint.sh

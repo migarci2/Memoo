@@ -15,8 +15,25 @@ declare global {
 const DEFAULT_API_BASE_URL = '/api/proxy';
 const DEFAULT_API_PUBLIC_BASE_URL = 'http://localhost:8000/api';
 const DEFAULT_SANDBOX_NOVNC_URL =
-  'http://localhost:6080/vnc.html?autoconnect=true&resize=scale';
+  'http://localhost:6080/vnc.html?autoconnect=true&resize=scale&reconnect=true&show_dot=false';
 const DEFAULT_GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
+
+function normalizeSandboxNovncUrl(rawUrl: string): string {
+  try {
+    const base =
+      typeof window !== 'undefined' && window.location?.href
+        ? window.location.href
+        : 'http://localhost/';
+    const url = new URL(rawUrl, base);
+    url.searchParams.set('autoconnect', 'true');
+    url.searchParams.set('resize', 'scale');
+    url.searchParams.set('reconnect', 'true');
+    url.searchParams.set('show_dot', 'false');
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+}
 
 function browserRuntimeConfig(): Partial<PublicRuntimeConfig> | undefined {
   if (typeof window === 'undefined') return undefined;
@@ -64,7 +81,7 @@ export function getApiBaseUrlServer(): string {
 }
 
 export function getSandboxNovncUrl(): string {
-  return getPublicRuntimeConfig().sandboxNovncUrl;
+  return normalizeSandboxNovncUrl(getPublicRuntimeConfig().sandboxNovncUrl);
 }
 
 export function getApiPublicBaseUrl(): string {

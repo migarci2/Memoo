@@ -912,7 +912,7 @@ async def sandbox_status() -> SandboxStatusOut:
             resp.raise_for_status()
         return SandboxStatusOut(
             healthy=True,
-            novnc_url='http://localhost:6080/vnc.html?autoconnect=true&resize=scale',
+            novnc_url='http://localhost:6080/vnc.html?autoconnect=true&resize=scale&reconnect=true&show_dot=false',
             cdp_url=settings.sandbox_cdp_url,
         )
     except Exception:
@@ -1118,6 +1118,9 @@ async def list_runs(team_id: str, db: AsyncSession = Depends(get_db)) -> list[Ru
 async def create_run(
     team_id: str, payload: RunCreate, db: AsyncSession = Depends(get_db)
 ) -> RunOut:
+    if not payload.playbook_id:
+        raise HTTPException(status_code=400, detail='Playbook runs require a playbook selection.')
+
     run = await create_run_record(
         db,
         team_id=team_id,
@@ -1126,7 +1129,7 @@ async def create_run(
         input_source=payload.input_source,
         selected_vault_credential_ids=payload.selected_vault_credential_ids,
         use_sandbox=payload.use_sandbox,
-        trigger_type='browser_agent' if not payload.playbook_id else 'csv_batch',
+        trigger_type='csv_batch',
     )
     enqueue_run_execution(run.id)
 
@@ -1143,7 +1146,7 @@ async def get_run_detail(run_id: str, db: AsyncSession = Depends(get_db)) -> Run
     if not run:
         raise HTTPException(status_code=404, detail='Run not found.')
 
-    playbook_name = 'Browser agent'
+    playbook_name = 'Playbook run'
     if run.playbook_id:
         playbook = await db.get(Playbook, run.playbook_id)
         if playbook:
