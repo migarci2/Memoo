@@ -211,11 +211,41 @@ async def execute_run(run_id: str) -> None:
                     raise RuntimeError('Run has no playbook steps to execute.')
                 steps = playbook_steps
 
+                emitted_events: dict[int, RunEvent] = {}
+
+                async def on_step_update(result: dict) -> None:
+                    seq = int(result.get('sequence') or 0)
+                    status = result.get('status', 'running')
+
+                    if seq not in emitted_events:
+                        used_names = step_credential_usage.get(seq, set())
+                        vault_used = ', '.join(sorted(used_names)) if used_names else None
+
+                        ev = RunEvent(
+                            run_item_id=item.id,
+                            step_sequence=seq,
+                            step_title=result.get('title', ''),
+                            status=status,
+                            expected_state=result.get('expected_state', ''),
+                            actual_state=result.get('actual_state', ''),
+                            vault_credential_used=vault_used,
+                        )
+                        db.add(ev)
+                        emitted_events[seq] = ev
+                    else:
+                        ev = emitted_events[seq]
+                        ev.status = status
+                        ev.actual_state = result.get('actual_state', '')
+
+                    # We commit right away so the frontend polling /runs/id sees it
+                    await db.commit()
+
                 if run.use_sandbox:
                     step_results = await execute_in_sandbox(
                         steps=steps,
                         row_data=row_data,
                         screenshot=True,
+                        step_callback=on_step_update,
                     )
                 else:
                     step_results = await execute_playbook_steps(
@@ -223,31 +253,30 @@ async def execute_run(run_id: str) -> None:
                         row_data=row_data,
                         headless=True,
                         screenshot=True,
+                        step_callback=on_step_update,
                     )
 
                 item_failed = False
                 used_credential_names_for_item: set[str] = set()
+                
+                # Make sure all final results are firmly committed, mainly for headless mode or edge cases
                 for result in step_results:
                     seq = int(result.get('sequence') or 0)
+                    if seq not in emitted_events:
+                        await on_step_update(result)
+                    else:
+                        # Ensure final state is correctly captured
+                        ev = emitted_events[seq]
+                        ev.status = result.get('status', 'failed')
+                        ev.actual_state = result.get('actual_state', '')
+                        await db.commit()
+
+                    if result.get('status') == 'failed':
+                        item_failed = True
+
                     used_names = step_credential_usage.get(seq, set())
                     if used_names:
                         used_credential_names_for_item.update(used_names)
-                    vault_used = ', '.join(sorted(used_names)) if used_names else None
-
-                    event = RunEvent(
-                        run_item_id=item.id,
-                        step_sequence=result['sequence'],
-                        step_title=result['title'],
-                        status=result['status'],
-                        expected_state=result.get('expected_state', ''),
-                        actual_state=result.get('actual_state', ''),
-                        vault_credential_used=vault_used,
-                        # screenshot_url can be set after uploading to MinIO
-                    )
-                    db.add(event)
-
-                    if result['status'] == 'failed':
-                        item_failed = True
 
                 if selected_creds and playbook_steps and not used_credential_names_for_item:
                     item_failed = True

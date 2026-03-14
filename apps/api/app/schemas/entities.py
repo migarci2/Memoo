@@ -50,6 +50,10 @@ class TeamSummary(BaseModel):
     created_at: datetime
 
 
+class TeamUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=200)
+
+
 class UserSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -375,6 +379,7 @@ class RunDetailOut(BaseModel):
     items: list[RunItemOut]
     events_by_item: dict[str, list[RunEventOut]]
     playbook_name: str
+    playbook_steps: list[dict] = Field(default_factory=list)
 
 
 # ── Vault ────────────────────────────────────────────────────────────────────

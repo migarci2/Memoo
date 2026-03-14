@@ -8,7 +8,7 @@ import { useAuth } from '@/components/auth-provider';
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
-import type { TeamMember, TeamMemberCreateInput, TeamMemberProfileUpdate } from '@/lib/types';
+import type { Team, TeamMember, TeamMemberCreateInput, TeamMemberProfileUpdate, TeamUpdateInput } from '@/lib/types';
  
 export default function SettingsPage() {
   const { teamId } = useParams<{ teamId: string }>();
@@ -23,6 +23,8 @@ export default function SettingsPage() {
   const [profileName, setProfileName] = useState('');
   const [profileTitle, setProfileTitle] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+  const [teamName, setTeamName] = useState('');
+  const [savingTeam, setSavingTeam] = useState(false);
 
   // Direct add state
   const [addForm, setAddForm] = useState({
@@ -58,6 +60,39 @@ export default function SettingsPage() {
     setProfileName(currentUser.full_name ?? '');
     setProfileTitle(currentUser.job_title ?? '');
   }, [currentUser]);
+
+  useEffect(() => {
+    setTeamName(session?.team_name ?? '');
+  }, [session?.team_name]);
+
+  const canEditTeam = session?.role === 'owner' || session?.role === 'admin';
+
+  const saveTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canEditTeam) {
+      toast('Only admins and owners can change the team name', 'error');
+      return;
+    }
+
+    const cleanName = teamName.trim();
+    if (cleanName.length < 2) {
+      toast('Team name must be at least 2 characters', 'error');
+      return;
+    }
+
+    setSavingTeam(true);
+    try {
+      const payload: TeamUpdateInput = { name: cleanName };
+      const updated = await apiPatch<Team>(`/teams/${teamId}`, payload);
+      updateSession({ team_name: updated.name });
+      setTeamName(updated.name);
+      toast('Team name updated', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to update team name', 'error');
+    } finally {
+      setSavingTeam(false);
+    }
+  };
 
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,6 +190,37 @@ export default function SettingsPage() {
 
       <div className="space-y-6">
         <div className="grid gap-6 xl:grid-cols-2">
+          <div className="panel p-6">
+            <h2 className="mb-4 text-lg font-bold">Team profile</h2>
+            <form onSubmit={saveTeam} className="grid gap-4">
+              <label className="grid gap-1.5 text-sm font-semibold">
+                Team name
+                <input
+                  className="input"
+                  value={teamName}
+                  onChange={e => setTeamName(e.target.value)}
+                  placeholder="Northline Operations"
+                  disabled={!canEditTeam}
+                />
+              </label>
+              <p className="text-xs text-[var(--app-muted)]">
+                {canEditTeam
+                  ? 'This updates the workspace name shown across the app.'
+                  : 'Only admins and owners can change the workspace name.'}
+              </p>
+              <div className="pt-1">
+                <button
+                  type="submit"
+                  disabled={savingTeam || !canEditTeam}
+                  className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+                >
+                  {savingTeam && <span className="animate-spin inline-flex"><CircleNotch size={15} /></span>}
+                  Save team
+                </button>
+              </div>
+            </form>
+          </div>
+
           <div className="panel p-6">
             <h2 className="mb-4 text-lg font-bold">Your profile</h2>
             <form onSubmit={saveProfile} className="grid gap-4">

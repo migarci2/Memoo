@@ -68,6 +68,7 @@ from app.schemas.entities import (
     TeamOnboardingCreate,
     TeamOverview,
     TeamSummary,
+    TeamUpdate,
     UserSummary,
     VaultCredentialCreate,
     VaultCredentialOut,
@@ -192,6 +193,25 @@ async def create_team_onboarding(
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
+
+@router.patch('/teams/{team_id}', response_model=TeamSummary)
+async def update_team(
+    team_id: str, payload: TeamUpdate, db: AsyncSession = Depends(get_db)
+) -> TeamSummary:
+    team = await db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail='Team not found.')
+
+    if payload.name is not None:
+        clean_name = payload.name.strip()
+        if len(clean_name) < 2:
+            raise HTTPException(status_code=400, detail='Team name must be at least 2 characters.')
+        team.name = clean_name
+
+    await db.commit()
+    await db.refresh(team)
+
+    return TeamSummary.model_validate(team, from_attributes=True)
 
 @router.get('/teams/{team_id}/dashboard', response_model=TeamOverview)
 async def get_dashboard(team_id: str, db: AsyncSession = Depends(get_db)) -> TeamOverview:
@@ -1147,10 +1167,27 @@ async def get_run_detail(run_id: str, db: AsyncSession = Depends(get_db)) -> Run
         raise HTTPException(status_code=404, detail='Run not found.')
 
     playbook_name = 'Playbook run'
+    playbook_steps = []
     if run.playbook_id:
         playbook = await db.get(Playbook, run.playbook_id)
         if playbook:
             playbook_name = playbook.name
+            
+    if run.playbook_version_id:
+        version = await db.scalar(
+            select(PlaybookVersion)
+            .where(PlaybookVersion.id == run.playbook_version_id)
+            .options(selectinload(PlaybookVersion.steps))
+        )
+        if version:
+            for s in sorted(version.steps, key=lambda s: s.sequence):
+                playbook_steps.append({
+                    'sequence': s.sequence,
+                    'title': s.title,
+                    'step_type': s.step_type,
+                    'target_url': s.target_url,
+                    'selector': s.selector,
+                })
 
     items_out = []
     events_map: dict[str, list[RunEventOut]] = {}
@@ -1167,6 +1204,7 @@ async def get_run_detail(run_id: str, db: AsyncSession = Depends(get_db)) -> Run
         items=items_out,
         events_by_item=events_map,
         playbook_name=playbook_name,
+        playbook_steps=playbook_steps,
     )
 
 

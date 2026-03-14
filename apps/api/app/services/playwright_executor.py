@@ -22,6 +22,16 @@ import logging
 import re
 from typing import Any
 
+from app.core.config import get_settings
+from app.services.sandbox_executor import (
+    _should_use_stagehand,
+    _agent_start_url,
+    _build_autonomous_task,
+    _run_stagehand_step,
+    _verify_autonomous_outcome,
+    _format_stagehand_summary,
+)
+
 logger = logging.getLogger(__name__)
 
 # ── Variable substitution ────────────────────────────────────────────────────
@@ -45,6 +55,7 @@ async def execute_playbook_steps(
     headless: bool = True,
     timeout_ms: int = 15_000,
     screenshot: bool = True,
+    step_callback: Any | None = None,
 ) -> list[dict]:
     """Execute a list of playbook steps via Playwright and return per-step results.
 
@@ -66,12 +77,17 @@ async def execute_playbook_steps(
         logger.warning('playwright not installed — falling back to simulation')
         return await _simulate_steps(steps, row_data)
 
+    settings = get_settings()
     results: list[dict] = []
 
     try:
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=headless)
-            context = await browser.new_context(
+            # We use launch_server so we can get a CDP websocket URL for Stagehand
+            browser_server = await pw.chromium.launch_server(headless=headless, args=['--remote-debugging-port=0'])
+            ws_endpoint = browser_server.ws_endpoint
+            browser = await pw.chromium.connect_over_cdp(ws_endpoint)
+            
+            context = browser.contexts[0] if browser.contexts else await browser.new_context(
                 viewport={'width': 1280, 'height': 800},
                 user_agent=(
                     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
@@ -98,62 +114,157 @@ async def execute_playbook_steps(
                 expected = step.get('guardrails', {}).get('verify', f'{title} completed')
                 screenshot_b64: str | None = None
 
+                # Notify running state before starting
+                if step_callback:
+                    try:
+                        await step_callback({
+                            'sequence': seq,
+                            'title': title,
+                            'status': 'running',
+                            'expected_state': expected,
+                            'actual_state': 'Starting step...',
+                            'is_agent': False,
+                        })
+                    except Exception:
+                        pass
+
                 try:
-                    if step_type == 'navigate':
-                        if target_url:
-                            await page.goto(target_url, wait_until='domcontentloaded')
-                        actual = f'Navigated to {page.url}'
+                    autonomous_target_url = _agent_start_url(row_data, target_url)
+                    used_agent = False
 
-                    elif step_type == 'click':
-                        if selector:
-                            await page.click(selector)
-                        actual = f'Clicked {selector or "element"}'
+                    try:
+                        if step_type == 'navigate':
+                            if target_url:
+                                if not target_url.startswith(('http://', 'https://', 'about:')):
+                                    target_url = f'https://{target_url}'
+                                await page.goto(target_url, wait_until='domcontentloaded')
+                            actual = f'Navigated to {page.url}'
 
-                    elif step_type == 'input':
-                        if selector and resolved_values:
-                            value = next(iter(resolved_values.values()), '')
-                            await page.fill(selector, value)
-                            actual = f'Filled {selector} with value'
+                        elif step_type == 'click':
+                            if selector:
+                                await page.click(selector)
+                            actual = f'Clicked {selector or "element"}'
+
+                        elif step_type == 'input':
+                            if selector and resolved_values:
+                                value = next(iter(resolved_values.values()), '')
+                                await page.fill(selector, value)
+                                actual = f'Filled {selector} with value'
+                            else:
+                                actual = 'Input step skipped (no selector or value)'
+
+                        elif step_type == 'submit':
+                            if selector:
+                                await page.click(selector)
+                            else:
+                                await page.keyboard.press('Enter')
+                            # Wait a moment for the submission to process
+                            await asyncio.sleep(0.5)
+                            actual = 'Form submitted'
+
+                        elif step_type == 'verify':
+                            if selector:
+                                await page.wait_for_selector(selector, timeout=timeout_ms)
+                                actual = f'Verified {selector} is present'
+                            else:
+                                actual = expected or 'Verification passed'
+
+                        elif step_type == 'wait':
+                            wait_secs = float(step.get('variables', {}).get('seconds', 2))
+                            await asyncio.sleep(wait_secs)
+                            actual = f'Waited {wait_secs}s'
+                            
+                        elif _should_use_stagehand(step_type):
+                            used_agent = True
+                            raise NotImplementedError("Delegate to Stagehand")
+
                         else:
-                            actual = 'Input step skipped (no selector or value)'
+                            actual = f'Action "{step_type}" executed'
 
-                    elif step_type == 'submit':
-                        if selector:
-                            await page.click(selector)
+                    except Exception as action_error:
+                        if step_type == 'navigate' or step_type == 'wait':
+                            raise action_error
+
+                        if not settings.stagehand_enabled:
+                            if isinstance(action_error, NotImplementedError):
+                                raise RuntimeError('Stagehand autonomous execution is disabled.')
+                            raise action_error
+
+                        used_agent = True
+                        if isinstance(action_error, NotImplementedError):
+                            logger.info(f"Using Stagehand for autonomous step '{title}'")
+                            intermediate_msg = "Starting autonomous execution with AI Agent..."
                         else:
-                            await page.keyboard.press('Enter')
-                        # Wait a moment for the submission to process
-                        await asyncio.sleep(0.5)
-                        actual = 'Form submitted'
+                            logger.info(f"Falling back to Stagehand for step '{title}' due to: {action_error}")
+                            intermediate_msg = f"Selector failed, AI Agent taking over... ({action_error})"
 
-                    elif step_type == 'verify':
-                        if selector:
-                            await page.wait_for_selector(selector, timeout=timeout_ms)
-                            actual = f'Verified {selector} is present'
-                        else:
-                            actual = expected or 'Verification passed'
+                        if step_callback:
+                            try:
+                                await step_callback({
+                                    'sequence': seq,
+                                    'title': title,
+                                    'status': 'running',
+                                    'expected_state': expected,
+                                    'actual_state': intermediate_msg,
+                                    'is_agent': True,
+                                })
+                            except Exception:
+                                pass
 
-                    elif step_type == 'wait':
-                        wait_secs = float(step.get('variables', {}).get('seconds', 2))
-                        await asyncio.sleep(wait_secs)
-                        actual = f'Waited {wait_secs}s'
+                        if autonomous_target_url and _should_use_stagehand(step_type):
+                            if not autonomous_target_url.startswith(('http://', 'https://', 'about:')):
+                                autonomous_target_url = f'https://{autonomous_target_url}'
+                            if page.url != autonomous_target_url:
+                                await page.goto(autonomous_target_url, wait_until='domcontentloaded')
 
-                    else:
-                        actual = f'Action "{step_type}" executed'
+                        task = _build_autonomous_task(
+                            title=title,
+                            expected=expected,
+                            target_url=autonomous_target_url if _should_use_stagehand(step_type) else None,
+                            selector=selector,
+                            resolved_values=resolved_values,
+                            row_data=row_data,
+                            step=step,
+                        )
+                        agent_result = await _run_stagehand_step(
+                            settings,
+                            ws_endpoint=ws_endpoint,
+                            task=task,
+                            start_url=None,
+                        )
+
+                        await _verify_autonomous_outcome(
+                            page,
+                            selector=selector,
+                            expected_text=step.get('guardrails', {}).get('expected_text'),
+                            timeout_ms=timeout_ms,
+                        )
+
+                        actual = _format_stagehand_summary(agent_result)
+                        if not agent_result.get('success', False) and not agent_result.get('completed', False):
+                            logger.warning(f"Stagehand failed or incomplete: {actual}")
 
                     # Take screenshot
                     if screenshot:
                         png_bytes = await page.screenshot(type='png')
                         screenshot_b64 = base64.b64encode(png_bytes).decode()
 
-                    results.append({
+                    step_result = {
                         'sequence': seq,
                         'title': title,
                         'status': 'success',
                         'expected_state': expected,
                         'actual_state': actual,
                         'screenshot_b64': screenshot_b64,
-                    })
+                        'is_agent': used_agent,
+                    }
+                    results.append(step_result)
+
+                    if step_callback:
+                        try:
+                            await step_callback(step_result)
+                        except Exception:
+                            pass
 
                 except Exception as e:
                     # Step failed — capture screenshot of error state
@@ -164,18 +275,28 @@ async def execute_playbook_steps(
                         except Exception:
                             pass
 
-                    results.append({
+                    step_result = {
                         'sequence': seq,
                         'title': title,
                         'status': 'failed',
                         'expected_state': expected,
                         'actual_state': str(e),
                         'screenshot_b64': screenshot_b64,
-                    })
+                        'is_agent': used_agent,
+                    }
+                    results.append(step_result)
+
+                    if step_callback:
+                        try:
+                            await step_callback(step_result)
+                        except Exception:
+                            pass
+                            
                     # Stop processing further steps on failure
                     break
 
             await browser.close()
+            await browser_server.close()
 
     except Exception as e:
         logger.error(f'Playwright execution error: {e}')

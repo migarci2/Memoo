@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Lightning, Play, Trash, CircleNotch } from '@phosphor-icons/react';
+import { Lightning, Play, Trash, CircleNotch , Clock, Link, CaretDown, CaretRight, Code} from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
@@ -35,6 +35,7 @@ export default function AutomationsPage() {
   const [useSandbox, setUseSandbox] = useState(true);
   const [selectedVaultIds, setSelectedVaultIds] = useState<string[]>([]);
   const [inputRowsJson, setInputRowsJson] = useState('[{}]');
+  const [showInputJson, setShowInputJson] = useState(false);
 
   const webhookBase = useMemo(() => getApiPublicBaseUrl().replace(/\/$/, ''), []);
 

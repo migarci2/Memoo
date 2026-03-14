@@ -100,14 +100,14 @@ export default function RunDetailPage() {
       .finally(() => setLoading(false));
   }, [runId]);
 
-  // Poll while running
+  // Poll while running or pending
   useEffect(() => {
-    if (!detail || detail.run.status !== 'running') return;
+    if (!detail || (detail.run.status !== 'running' && detail.run.status !== 'pending')) return;
     const timer = setInterval(() => {
       apiGet<RunDetail>(`/runs/${runId}`).then(setDetail).catch(() => {});
     }, 2000);
     return () => clearInterval(timer);
-  }, [detail, runId]);
+  }, [detail?.run?.status, runId]);
 
   if (loading) {
     return (
@@ -360,6 +360,96 @@ export default function RunDetailPage() {
           </p>
         </div>
       )}
+
+      {/* Playbook Flow / Nodes */}
+      {detail.playbook_steps && detail.playbook_steps.length > 0 && (() => {
+        const activeItem = expandedItem
+          ? items.find((i) => i.id === expandedItem)
+          : (items.find((i) => i.status === 'running') || items[0]);
+        const activeItemEvents = activeItem ? events_by_item[activeItem.id] || [] : [];
+        const lastCompletedSequence = activeItemEvents.filter((e) => e.status === 'success' || e.status === 'completed').length > 0
+          ? Math.max(...activeItemEvents.filter((e) => e.status === 'success' || e.status === 'completed').map((e) => e.step_sequence))
+          : 0;
+        const currentRunningSequence = activeItemEvents.find((e) => e.status === 'running')?.step_sequence 
+          ?? (activeItem?.status === 'running' ? lastCompletedSequence + 1 : -1);
+
+        return (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="inline-flex text-[var(--app-muted)]">
+                <FileText size={18} weight="regular" />
+              </span>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--app-muted)]">
+                Playbook Flow {activeItem && <span className="normal-case font-normal ml-2 opacity-70">(Row {activeItem.row_index + 1})</span>}
+              </h2>
+            </div>
+            <div className="flex overflow-x-auto gap-3 pb-3 snap-x">
+              {detail.playbook_steps.map((step, idx) => {
+                const seq = step.sequence ?? idx + 1;
+                let stepStatus = 'pending';
+                
+                const ev = activeItemEvents.find((e) => e.step_sequence === seq);
+                if (ev) {
+                  stepStatus = ev.status;
+                } else if (seq === currentRunningSequence) {
+                  stepStatus = 'running';
+                } else if (seq < currentRunningSequence) {
+                  stepStatus = activeItem?.status === 'failed' ? 'pending' : 'success';
+                }
+
+                let cardClass = "panel shrink-0 w-48 p-4 snap-start border transition-colors ";
+                let badgeClass = "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ";
+
+                if (stepStatus === 'success' || stepStatus === 'completed') {
+                  cardClass += "border-[#4a8c61] bg-[rgba(76,175,80,0.03)]";
+                  badgeClass += "bg-[#4a8c61] text-[#fff]";
+                } else if (stepStatus === 'running') {
+                  cardClass += "border-[var(--app-blue)] shadow-[0_0_0_1px_var(--app-blue)] bg-[#0f1720]";
+                  badgeClass += "bg-[var(--app-blue)] text-[#fff] animate-pulse";
+                } else if (stepStatus === 'failed') {
+                  cardClass += "border-[#8b3a3a] bg-[rgba(191,100,100,0.05)]";
+                  badgeClass += "bg-[#8b3a3a] text-[#fff]";
+                } else {
+                  cardClass += "border-[var(--app-line)] bg-[var(--app-bg)] opacity-60";
+                  badgeClass += "bg-[var(--app-line)] text-[var(--app-muted)]";
+                }
+
+                return (
+                  <div key={idx} className={cardClass}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={badgeClass}>
+                        {seq}
+                      </span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--app-muted)]">
+                        {step.step_type}
+                      </span>
+                      {stepStatus === 'running' && (
+                        <span className="ml-auto flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-[var(--app-blue)] opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--app-blue)]"></span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-semibold truncate" title={step.title}>
+                      {step.title || 'Untitled'}
+                    </p>
+                    {step.target_url && (
+                      <p className="mt-1 text-[11px] truncate text-[var(--app-muted)]" title={step.target_url}>
+                        {step.target_url}
+                      </p>
+                    )}
+                    {step.selector && (
+                      <p className="mt-1 font-mono text-[10px] truncate text-[var(--app-muted)]" title={step.selector}>
+                        {step.selector}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Items + events */}
       <div className="space-y-3">

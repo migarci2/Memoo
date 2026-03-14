@@ -10,6 +10,10 @@ export type Team = {
   plan: string;
 };
 
+export type TeamUpdateInput = {
+  name?: string;
+};
+
 export type TeamOverview = {
   team_id: string;
   members_count: number;
@@ -251,6 +255,7 @@ export type RunDetail = {
   items: RunItem[];
   events_by_item: Record<string, RunEvent[]>;
   playbook_name: string;
+  playbook_steps?: any[];
 };
 
 // ── Vault ────────────────────────────────────────────────────────────────

@@ -117,7 +117,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
   const navItems = isPublicRoute ? publicNavItems : teamNavItems;
   const showAuthenticatedUi = isAuthenticated && !!session;
   const showPublicAuthCtas = isPublicRoute && !isAuthenticated;
-  const displayName = teamName ?? (resolvedTeamId ? `Team ${resolvedTeamId.slice(0, 6)}` : null);
+  const displayName = teamName ?? session?.team_name ?? (resolvedTeamId ? `Team ${resolvedTeamId.slice(0, 6)}` : null);
   const initials = session
     ? session.full_name
         .split(' ')
