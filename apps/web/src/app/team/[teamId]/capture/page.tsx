@@ -13,7 +13,6 @@ import {
   WaveTriangle,
 } from '@phosphor-icons/react';
 
-import { GeminiLivePanel } from '@/components/gemini-live-panel';
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
 import { useGeminiLive } from '@/hooks/use-gemini-live';
@@ -132,19 +131,6 @@ export default function CapturePage() {
 
       toast('Screen recording started — Gemini is watching', 'success');
 
-      // 4. Auto-start Gemini Live so spoken context is captured while recording.
-      try {
-        await live.start();
-        setLiveActive(true);
-        liveActiveRef.current = true;
-        toast('Gemini Live session active — speak to add context', 'success');
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[capture] auto-start live failed:', msg);
-        setLiveActive(false);
-        liveActiveRef.current = false;
-        toast('Recording started, but Gemini Live voice did not connect', 'error');
-      }
     } catch (err) {
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -401,6 +387,7 @@ export default function CapturePage() {
   const stopLiveSession = useCallback(() => {
     live.stop();
     setLiveActive(false);
+    liveActiveRef.current = false;
   }, [live]);
 
   /* ── render ────────────────────────────────────────────────────────────── */
@@ -527,10 +514,14 @@ export default function CapturePage() {
                     Start Live Session
                   </button>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4a8566]/30 bg-[rgba(80,139,130,0.1)] px-3 py-1.5 text-xs font-semibold text-[#4a8566]">
+                  <button
+                    onClick={stopLiveSession}
+                    title="Turn off Gemini Live"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#4a8566]/30 bg-[rgba(80,139,130,0.1)] px-3 py-1.5 text-xs font-semibold text-[#4a8566] transition-all hover:border-[#4a8566]/50 hover:bg-[rgba(80,139,130,0.16)]"
+                  >
                     <Microphone size={12} weight="fill" />
                     Live session active
-                  </span>
+                  </button>
                 )}
 
                 <button
@@ -639,20 +630,6 @@ export default function CapturePage() {
                 )}
               </div>
             </div>
-
-            {/* ── Gemini Live panel (shown when active) ─────────────── */}
-            {liveActive && (
-              <div className="mt-5">
-                <GeminiLivePanel
-                  status={live.status}
-                  transcript={live.transcript}
-                  isMuted={live.isMuted}
-                  onMute={live.mute}
-                  onUnmute={live.unmute}
-                  onStop={stopLiveSession}
-                />
-              </div>
-            )}
           </div>
         </>
       )}

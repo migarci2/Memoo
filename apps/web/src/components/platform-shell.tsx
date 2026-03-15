@@ -10,9 +10,7 @@ import {
   List,
   Lock,
   Play,
-  SignIn,
   SignOut,
-  UserPlus,
   X,
 } from '@phosphor-icons/react';
 import Link from 'next/link';
@@ -110,8 +108,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
     : [];
 
   const publicNavItems: NavItem[] = [
-    { label: 'Log in', href: '/login', icon: SignIn },
-    { label: 'Register', href: '/register', icon: UserPlus },
+    { label: 'Demo access', href: '/login', icon: ArrowSquareOut },
   ];
 
   const navItems = isPublicRoute ? publicNavItems : teamNavItems;
@@ -208,7 +205,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                   href="/login"
                   className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--app-blue)] px-3 py-2 text-sm font-semibold text-white"
                 >
-                  Log in
+                  Enter demo
                 </Link>
               ) : (
                 <div className="h-9" aria-hidden="true" />
@@ -297,7 +294,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                     href="/login"
                     className="rounded-full bg-[var(--app-blue)] px-3 py-1.5 text-xs font-bold text-[var(--app-surface)] transition-opacity hover:opacity-90"
                   >
-                    Log in
+                    Enter demo
                   </Link>
                 ) : (
                   <div className="h-8 w-8" aria-hidden="true" />

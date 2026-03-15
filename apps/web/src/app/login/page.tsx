@@ -1,25 +1,19 @@
 'use client';
 
-import { CircleNotch, Lightning } from '@phosphor-icons/react';
+import { CircleNotch, Ticket } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
-
-const DEV_CREDENTIALS = {
-  team_slug: 'northline-ops',
-  email: 'amaya@northline.io',
-  password: 'demo1234',
-};
+import { DEMO_CREDENTIALS, DEMO_INVITE_CODE } from '@/lib/demo-access';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
-  const [form, setForm] = useState({ team_slug: '', email: '', password: '' });
+  const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [devLoading, setDevLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function doLogin(creds: { team_slug: string; email: string; password: string }) {
@@ -31,30 +25,23 @@ function LoginForm() {
   }
 
   async function submit() {
-    if (!form.team_slug.trim() || !form.email.trim() || !form.password) {
-      setError('Please fill in all fields.');
+    if (!inviteCode.trim()) {
+      setError('Enter the guest invite code.');
       return;
     }
+    if (inviteCode.trim() !== DEMO_INVITE_CODE) {
+      setError('Invalid guest invite code.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      await doLogin(form);
+      await doLogin(DEMO_CREDENTIALS);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in.');
+      setError(err instanceof Error ? err.message : 'Could not enter the demo.');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function devLogin() {
-    setDevLoading(true);
-    setError(null);
-    try {
-      await doLogin(DEV_CREDENTIALS);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in with dev account.');
-    } finally {
-      setDevLoading(false);
     }
   }
 
@@ -70,40 +57,20 @@ function LoginForm() {
             </span>
             memoo
           </Link>
-          <h1 className="mt-5 text-2xl font-extrabold tracking-tight">Welcome back</h1>
-          <p className="mt-1.5 text-sm text-[var(--app-muted)]">Sign in with your team slug and work email.</p>
+          <h1 className="mt-5 text-2xl font-extrabold tracking-tight">Enter the demo</h1>
+          <p className="mt-1.5 text-sm text-[var(--app-muted)]">Access the demo account with your guest invite code.</p>
         </div>
 
         <div className="panel p-6">
           <div className="grid gap-4">
             <label className="grid gap-1.5 text-sm font-medium">
-              Team slug
+              Guest invite code
               <input
                 className="input"
-                value={form.team_slug}
-                onChange={e => setForm(prev => ({ ...prev, team_slug: e.target.value }))}
-                placeholder="northline-ops"
+                value={inviteCode}
+                onChange={e => setInviteCode(e.target.value)}
+                placeholder="CODE HERE"
                 autoComplete="off"
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              Work email
-              <input
-                className="input"
-                type="email"
-                value={form.email}
-                onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="name@company.com"
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              Password
-              <input
-                className="input"
-                type="password"
-                value={form.password}
-                onChange={e => setForm(prev => ({ ...prev, password: e.target.value }))}
-                placeholder="••••••••"
                 onKeyDown={e => e.key === 'Enter' && submit()}
               />
             </label>
@@ -117,35 +84,24 @@ function LoginForm() {
 
           <button
             className="btn-primary mt-5 inline-flex w-full items-center justify-center gap-2 py-2.5 text-sm"
-            disabled={loading || devLoading}
+            disabled={loading}
             onClick={submit}
             type="button"
           >
-            {loading ? <span className="animate-spin inline-flex"><CircleNotch size={16} /></span> : null}
-            {loading ? 'Signing in…' : 'Log in'}
+            {loading ? <span className="animate-spin inline-flex"><CircleNotch size={16} /></span> : <Ticket size={16} weight="fill" />}
+            {loading ? 'Entering…' : 'Enter the demo'}
           </button>
 
-          <div className="relative mt-4">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[var(--app-border)]" /></div>
-            <div className="relative flex justify-center text-xs"><span className="bg-[var(--app-surface)] px-2 text-[var(--app-muted)]">or</span></div>
-          </div>
-
-          <button
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50"
-            disabled={loading || devLoading}
-            onClick={devLogin}
-            type="button"
-          >
-            {devLoading ? <span className="animate-spin inline-flex"><CircleNotch size={16} /></span> : <Lightning size={16} weight="fill" />}
-            {devLoading ? 'Signing in…' : 'Dev Login'}
-          </button>
-          <p className="mt-1.5 text-center text-[11px] text-[var(--app-muted)]">amaya@northline.io · northline-ops</p>
+          <p className="mt-3 text-center text-[11px] text-[var(--app-muted)]">
+            Demo Northline Operations
+          </p>
         </div>
 
         <p className="mt-5 text-center text-sm text-[var(--app-muted)]">
-          No account?{' '}
-          <Link href="/register" className="font-semibold text-[var(--app-blue)] hover:underline">
-            Create workspace
+          Invitation-only access for this demo.
+          {' '}
+          <Link href="/" className="font-semibold text-[var(--app-blue)] hover:underline">
+            Back to home
           </Link>
         </p>
       </div>

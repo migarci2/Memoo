@@ -256,18 +256,6 @@
   padding: 1rem;
 }
 
-.hero-preview::after {
-  content: '';
-  position: absolute;
-  width: 180px;
-  aspect-ratio: 1;
-  right: -40px;
-  top: -50px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(15, 143, 126, 0.35), rgba(15, 143, 126, 0));
-  pointer-events: none;
-}
-
 .preview-chip {
   margin: 0;
   font-family: var(--app-font-display), sans-serif;

@@ -171,14 +171,14 @@ export default function HomePage() {
         <nav className={cx('topnav')} aria-label="Primary">
           <a href="#story">How it works</a>
           <a href="#proof">Proof</a>
-          <a href="/login">Log in</a>
+          <a href="/login">Demo access</a>
         </nav>
         <div className={cx('topbar-actions')}>
-          <a className={cx('btn', 'btn-soft')} href="/login">
-            Log in
+          <a className={cx('btn', 'btn-soft')} href="#story">
+            How it works
           </a>
-          <a className={cx('btn', 'btn-primary')} href="/register">
-            Create account
+          <a className={cx('btn', 'btn-primary')} href="/login">
+            Enter with code
           </a>
         </div>
       </header>
@@ -193,11 +193,11 @@ export default function HomePage() {
               same playbook with coworkers.
             </p>
             <div className={cx('hero-actions')}>
-              <a className={cx('btn', 'btn-primary')} href="/register">
-                Create account
+              <a className={cx('btn', 'btn-ghost')} href="#story">
+                See how it works
               </a>
-              <a className={cx('btn', 'btn-ghost')} href="/login">
-                Log in
+              <a className={cx('btn', 'btn-primary')} href="/login">
+                Use invite code
               </a>
             </div>
           </div>
@@ -317,8 +317,8 @@ export default function HomePage() {
         <section id="final-cta" className={cx('final-cta', 'container')}>
           <h2>Bring one workflow. Leave with a repeatable system.</h2>
           <p>We will map one recurring process and show how your team can scale it.</p>
-          <a className={cx('btn', 'btn-primary')} href="/register">
-            Create account
+          <a className={cx('btn', 'btn-primary')} href="/login">
+            Enter the demo
           </a>
         </section>
       </main>
@@ -341,7 +341,7 @@ export default function HomePage() {
             <div>
               <h4>Product</h4>
               <a href="#story">How it works</a>
-              <a href="/register">Create account</a>
+              <a href="/login">Demo access</a>
               <a href="#">Use cases</a>
             </div>
             <div>
