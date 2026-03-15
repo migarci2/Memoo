@@ -73,18 +73,10 @@ function cx(...names: Array<string | false | null | undefined>) {
   return names.filter(Boolean).map(name => styles[name as string]).join(' ');
 }
 
-function probeImage(path: string, onSuccess: () => void, onError: () => void) {
-  const probe = new window.Image();
-  probe.onload = onSuccess;
-  probe.onerror = onError;
-  probe.src = path;
-}
-
 export default function HomePage() {
   const [activeStep, setActiveStep] = useState(0);
   const [hideTopbar, setHideTopbar] = useState(false);
-  const [heroGifReady, setHeroGifReady] = useState(false);
-  const [storyGifReady, setStoryGifReady] = useState(false);
+
   const storyRef = useRef<HTMLElement | null>(null);
   const stepRefs = useRef<Array<HTMLElement | null>>([]);
 
@@ -92,10 +84,7 @@ export default function HomePage() {
 
   const duplicatedLogos = useMemo(() => [...logos, ...logos], []);
 
-  useEffect(() => {
-    probeImage('/assets/hero-preview.gif', () => setHeroGifReady(true), () => setHeroGifReady(false));
-    probeImage('/assets/story-preview.gif', () => setStoryGifReady(true), () => setStoryGifReady(false));
-  }, []);
+
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -205,13 +194,12 @@ export default function HomePage() {
           <aside className={cx('hero-preview')}>
             <p className={cx('preview-chip')}>Preview</p>
             <div className={cx('hero-gif-slot')}>
-              {heroGifReady ? <img src="/assets/hero-preview.gif" alt="memoo hero preview" /> : null}
-              {!heroGifReady ? (
-                <div className={cx('gif-fallback')}>
-                  <p>Drop your hero GIF preview here.</p>
-                  <code>public/assets/hero-preview.gif</code>
-                </div>
-              ) : null}
+              <iframe
+                src="/assets/hero-preview.html"
+                title="memoo hero preview"
+                style={{ width: '100%', height: '500px', border: 'none', display: 'block' }}
+                scrolling="no"
+              />
             </div>
             <p className={cx('hero-preview-note')}>Hero preview can be different from the scrollytelling demo below.</p>
           </aside>
@@ -267,13 +255,12 @@ export default function HomePage() {
               <p>{currentStep.copy}</p>
 
               <div className={cx('gif-slot')}>
-                {storyGifReady ? <img src="/assets/story-preview.gif" alt="memoo story preview" /> : null}
-                {!storyGifReady ? (
-                  <div className={cx('gif-fallback')}>
-                    <p>Preview area for your product GIF</p>
-                    <code>public/assets/story-preview.gif</code>
-                  </div>
-                ) : null}
+                <iframe
+                  src="/assets/story-preview.html"
+                  title="memoo story preview"
+                  style={{ width: '100%', height: '560px', border: 'none', display: 'block' }}
+                  scrolling="no"
+                />
               </div>
             </aside>
           </div>
