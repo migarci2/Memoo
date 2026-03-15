@@ -72,18 +72,6 @@ export default function CapturePage() {
   /* live voice session */
   const [liveActive, setLiveActive] = useState(false);
   const live = useGeminiLive({
-    onVoiceNote: (text, role) => {
-      // Keep user speech in Live chat only; persist only Gemini's structured output.
-      if (role !== 'gemini') return;
-      const captureId = captureIdRef.current;
-      if (!captureId) return;
-      const kind = 'gemini_clarification';
-      apiPost(`/captures/${captureId}/events`, [
-        { kind, text, timestamp: new Date().toISOString() },
-      ]).catch(() => {});
-      // Also add to local event timeline
-      setEvents((prev: CaptureEventInput[]) => [...prev, { kind, text }]);
-    },
     onError: (msg) => {
       toast(msg, 'error');
     },

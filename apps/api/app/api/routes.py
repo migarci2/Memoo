@@ -80,6 +80,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 ALLOWED_STEP_TYPES = {'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'action'}
+ALLOWED_CAPTURE_EVENT_KINDS = ALLOWED_STEP_TYPES
 NON_ACTION_EVENT_KINDS = {'voice_note', 'gemini_clarification'}
 
 
@@ -94,6 +95,20 @@ def _clean_text(value: object, max_len: int) -> str | None:
     if max_len <= 3:
         return text[:max_len]
     return f'{text[:max_len - 3].rstrip()}...'
+
+
+def _normalize_capture_event(event: dict) -> dict | None:
+    kind = event.get('kind')
+    if kind not in ALLOWED_CAPTURE_EVENT_KINDS:
+        return None
+    return {
+        'kind': kind,
+        'url': event.get('url'),
+        'selector': event.get('selector'),
+        'value': event.get('value'),
+        'text': event.get('text'),
+        'timestamp': event.get('timestamp'),
+    }
 
 
 def _hash_password(plain: str) -> str:
@@ -715,7 +730,9 @@ async def add_capture_events(
 
     current = list(capture.raw_events or [])
     for ev in events:
-        current.append(ev.model_dump(exclude_none=True))
+        normalized = _normalize_capture_event(ev.model_dump(exclude_none=True))
+        if normalized:
+            current.append(normalized)
     capture.raw_events = current
 
     await db.commit()
@@ -758,26 +775,23 @@ async def analyze_frame(
         mime_type=payload.mime_type,
     )
 
+    normalized_events = [
+        normalized
+        for ev in result.get('events', [])
+        for normalized in [_normalize_capture_event(ev)]
+        if normalized
+    ]
+
     # Auto-save newly detected events into the capture
-    if result.get('detected') and result.get('events'):
-        for ev in result['events']:
-            previous_events.append(ev)
+    if normalized_events:
+        previous_events.extend(normalized_events)
         capture.raw_events = previous_events
         await db.commit()
         await db.refresh(capture)
 
     return FrameAnalysisOut(
-        detected=result.get('detected', False),
-        events=[
-            {
-                'kind': e.get('kind', 'action'),
-                'url': e.get('url'),
-                'selector': e.get('selector'),
-                'value': e.get('value'),
-                'text': e.get('text'),
-            }
-            for e in result.get('events', [])
-        ],
+        detected=bool(normalized_events),
+        events=normalized_events,
     )
 
 

@@ -16,6 +16,7 @@ import logging
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+ALLOWED_CAPTURE_EVENT_KINDS = {'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'action'}
 
 # ── Prompt ───────────────────────────────────────────────────────────────────
 
@@ -138,8 +139,11 @@ async def analyse_frame(
         events = result.get('events', [])
         normalised = []
         for ev in events:
+            kind = ev.get('kind', 'action')
+            if kind not in ALLOWED_CAPTURE_EVENT_KINDS:
+                continue
             normalised.append({
-                'kind': ev.get('kind', 'action'),
+                'kind': kind,
                 'url': ev.get('url'),
                 'selector': ev.get('selector'),
                 'value': ev.get('value'),
