@@ -20,7 +20,7 @@ const vagRounded = localFont({
 
 export const metadata: Metadata = {
   title: 'memoo — Operations Platform',
-  description: 'Capture browser workflows once. Run them at scale with full governance and audit evidence.',
+  description: 'A UI Navigator that sees the browser, hears voice context, and runs grounded workflows with live evidence.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

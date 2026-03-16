@@ -16,35 +16,35 @@ type Step = {
 const storySteps: Step[] = [
   {
     step: '1',
-    title: 'Record the workflow',
-    copy: 'Capture the task once in teach mode, exactly the way your team already performs it.',
+    title: 'Record the workflow live',
+    copy: 'Capture the task once in Teach Mode while Memoo watches the browser and follows the real screen state.',
     status: 'Step 1 of 4',
     shortTitle: 'Record once',
-    shortCopy: 'Show the task once. No script writing, no technical setup maze.',
+    shortCopy: 'Show the task once. No script writing, no selector mapping maze.',
   },
   {
     step: '2',
-    title: 'Prepare reusable steps',
-    copy: 'memoo structures actions into reusable workflow steps and detects variable inputs.',
+    title: 'Ground actions into steps',
+    copy: 'Memoo turns grounded visual actions and spoken context into reusable workflow steps with variable inputs.',
     status: 'Step 2 of 4',
-    shortTitle: 'Structure and prepare',
-    shortCopy: 'Your process becomes repeatable logic your team can trust.',
+    shortTitle: 'Ground and prepare',
+    shortCopy: 'The browser session becomes repeatable logic your team can trust.',
   },
   {
     step: '3',
-    title: 'Execute at scale',
-    copy: 'Run the same workflow in batch for records, rows, or lists while keeping consistent quality.',
+    title: 'Execute with live proof',
+    copy: 'Run the same workflow in batch for records, rows, or lists while watching the live sandbox and captured evidence.',
     status: 'Step 3 of 4',
-    shortTitle: 'Run many times',
-    shortCopy: 'Scale repetitive work without repeating repetitive clicks.',
+    shortTitle: 'Run with proof',
+    shortCopy: 'Scale repetitive work without losing sight of what the browser actually did.',
   },
   {
     step: '4',
-    title: 'Share with coworkers',
-    copy: 'Playbooks can be shared and reused across teams, so operations stay aligned.',
+    title: 'Share with the team',
+    copy: 'Playbooks, guardrails, and evidence can be shared across teams so operations stay aligned.',
     status: 'Step 4 of 4',
     shortTitle: 'Share and align',
-    shortCopy: 'One workflow, one standard, many teammates.',
+    shortCopy: 'One workflow, one grounded standard, many teammates.',
   },
 ];
 
@@ -73,12 +73,60 @@ function cx(...names: Array<string | false | null | undefined>) {
   return names.filter(Boolean).map(name => styles[name as string]).join(' ');
 }
 
+/* ── Decorative floating SVGs ── */
+function BrowserWindowSvg({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} width="120" height="88" viewBox="0 0 120 88" fill="none">
+      <rect x="1" y="1" width="118" height="86" rx="12" stroke="currentColor" strokeWidth="1.5" opacity="0.18" />
+      <line x1="1" y1="22" x2="119" y2="22" stroke="currentColor" strokeWidth="1" opacity="0.12" />
+      <circle cx="16" cy="12" r="3" fill="currentColor" opacity="0.12" />
+      <circle cx="26" cy="12" r="3" fill="currentColor" opacity="0.1" />
+      <circle cx="36" cy="12" r="3" fill="currentColor" opacity="0.08" />
+      <rect x="16" y="32" width="88" height="6" rx="3" fill="currentColor" opacity="0.07" />
+      <rect x="16" y="46" width="64" height="6" rx="3" fill="currentColor" opacity="0.05" />
+      <rect x="16" y="60" width="76" height="6" rx="3" fill="currentColor" opacity="0.05" />
+    </svg>
+  );
+}
+
+function CursorSvg({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} width="24" height="30" viewBox="0 0 24 30" fill="none">
+      <path d="M4 2 L4 24 L10 18 L17 26 L20 24 L14 16 L22 14 Z" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.2" />
+    </svg>
+  );
+}
+
+function ListSvg({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} width="80" height="72" viewBox="0 0 80 72" fill="none">
+      <rect x="1" y="1" width="78" height="70" rx="10" stroke="currentColor" strokeWidth="1.5" opacity="0.15" />
+      <circle cx="18" cy="20" r="4" fill="currentColor" opacity="0.1" />
+      <rect x="28" y="17" width="40" height="5" rx="2.5" fill="currentColor" opacity="0.08" />
+      <circle cx="18" cy="36" r="4" fill="currentColor" opacity="0.1" />
+      <rect x="28" y="33" width="32" height="5" rx="2.5" fill="currentColor" opacity="0.08" />
+      <circle cx="18" cy="52" r="4" fill="currentColor" opacity="0.1" />
+      <rect x="28" y="49" width="44" height="5" rx="2.5" fill="currentColor" opacity="0.08" />
+    </svg>
+  );
+}
+
+function PlaySvg({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} width="44" height="44" viewBox="0 0 44 44" fill="none">
+      <circle cx="22" cy="22" r="21" stroke="currentColor" strokeWidth="1.5" opacity="0.14" />
+      <path d="M17 13 L17 31 L33 22 Z" fill="currentColor" opacity="0.1" />
+    </svg>
+  );
+}
+
 export default function HomePage() {
   const [activeStep, setActiveStep] = useState(0);
   const [hideTopbar, setHideTopbar] = useState(false);
 
   const storyRef = useRef<HTMLElement | null>(null);
   const stepRefs = useRef<Array<HTMLElement | null>>([]);
+  const storyIframeRef = useRef<HTMLIFrameElement | null>(null);
 
   const currentStep = storySteps[activeStep] ?? storySteps[0];
 
@@ -111,6 +159,14 @@ export default function HomePage() {
 
     return () => observer.disconnect();
   }, []);
+
+  // Sync story iframe with active step
+  useEffect(() => {
+    const iframe = storyIframeRef.current;
+    if (iframe?.contentWindow) {
+      iframe.contentWindow.postMessage({ step: activeStep }, '*');
+    }
+  }, [activeStep]);
 
   useEffect(() => {
     const updateTopbarVisibility = () => {
@@ -159,7 +215,6 @@ export default function HomePage() {
         </a>
         <nav className={cx('topnav')} aria-label="Primary">
           <a href="#story">How it works</a>
-          <a href="#proof">Proof</a>
           <a href="/login">Demo access</a>
         </nav>
         <div className={cx('topbar-actions')}>
@@ -174,12 +229,20 @@ export default function HomePage() {
 
       <main>
         <section className={cx('hero', 'container')}>
+          {/* Floating decorative illustrations */}
+          <BrowserWindowSvg className={cx('hero-deco', 'hero-deco--tl')} />
+          <BrowserWindowSvg className={cx('hero-deco', 'hero-deco--br')} style={{ transform: 'scale(0.8)' }} />
+          <ListSvg className={cx('hero-deco', 'hero-deco--tr')} />
+          <PlaySvg className={cx('hero-deco', 'hero-deco--bl')} />
+          <CursorSvg className={cx('hero-deco', 'hero-deco--cursor')} style={{ top: '18%', left: '12%' }} />
+          <CursorSvg className={cx('hero-deco', 'hero-deco--cursor')} style={{ bottom: '22%', right: '8%' }} />
+
           <div className={cx('hero-copy')}>
-            <p className={cx('kicker')}>Browser workflow automation for business teams</p>
-            <h1>Record it once. Run it a thousand times.</h1>
+            <p className={cx('kicker')}>UI Navigator for business teams</p>
+            <h1>Show the browser once. Let Memoo guide it live.</h1>
             <p className={cx('lead')}>
-              A simple operational layer for repeated web tasks. Capture the process, execute at scale, and share the
-              same playbook with coworkers.
+              Memoo sees the screen, hears extra context, and turns repeated browser work into reusable playbooks with
+              live sandbox execution and step-by-step proof.
             </p>
             <div className={cx('hero-actions')}>
               <a className={cx('btn', 'btn-ghost')} href="#story">
@@ -201,7 +264,6 @@ export default function HomePage() {
                 scrolling="no"
               />
             </div>
-            <p className={cx('hero-preview-note')}>Hero preview can be different from the scrollytelling demo below.</p>
           </aside>
         </section>
 
@@ -256,6 +318,7 @@ export default function HomePage() {
 
               <div className={cx('gif-slot')}>
                 <iframe
+                  ref={storyIframeRef}
                   src="/assets/story-preview.html"
                   title="memoo story preview"
                   style={{ width: '100%', height: '560px', border: 'none', display: 'block' }}
@@ -263,41 +326,6 @@ export default function HomePage() {
                 />
               </div>
             </aside>
-          </div>
-        </section>
-
-        <section id="proof" className={cx('proof', 'container')}>
-          <h2>What teams say after switching repetitive workflows to memoo</h2>
-          <div className={cx('proof-grid')}>
-            <article>
-              <img src="https://i.pravatar.cc/96?img=12" alt="Ariana Voss" />
-              <p>
-                &quot;We replaced weekly copy-paste routines with one shared playbook. The team now runs the same
-                process with less rework.&quot;
-              </p>
-              <strong>Ariana Voss</strong>
-              <span>HR Operations Manager</span>
-            </article>
-
-            <article>
-              <img src="https://i.pravatar.cc/96?img=33" alt="Marco Ilan" />
-              <p>
-                &quot;The main benefit is consistency. Different people now execute the same finance workflow the same
-                way.&quot;
-              </p>
-              <strong>Marco Ilan</strong>
-              <span>Finance Operations Lead</span>
-            </article>
-
-            <article>
-              <img src="https://i.pravatar.cc/96?img=47" alt="Nina Calder" />
-              <p>
-                &quot;Support handoffs are faster because everyone can reuse playbooks instead of reinventing steps each
-                day.&quot;
-              </p>
-              <strong>Nina Calder</strong>
-              <span>Customer Support Supervisor</span>
-            </article>
           </div>
         </section>
 
@@ -329,30 +357,12 @@ export default function HomePage() {
               <h4>Product</h4>
               <a href="#story">How it works</a>
               <a href="/login">Demo access</a>
-              <a href="#">Use cases</a>
-            </div>
-            <div>
-              <h4>Company</h4>
-              <a href="#">About</a>
-              <a href="#">Security</a>
-              <a href="#">Contact</a>
-            </div>
-            <div>
-              <h4>Resources</h4>
-              <a href="#">Documentation</a>
-              <a href="#">Playbook templates</a>
-              <a href="#">Status</a>
             </div>
           </div>
         </div>
 
         <div className={cx('footer-bottom')}>
           <p>(c) 2026 memoo, Inc.</p>
-          <div>
-            <a href="#">Privacy</a>
-            <a href="#">Terms</a>
-            <a href="#">Cookies</a>
-          </div>
         </div>
       </footer>
     </div>
