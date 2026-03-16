@@ -13,6 +13,7 @@ Memoo is a UI Navigator product for repeated browser work. A teammate performs a
 ## Product Surfaces
 
 - `apps/web`: Next.js App Router frontend
+- `apps/video`: Remotion video studio for branded Memoo demos and motion assets
 - `apps/api`: FastAPI backend, Gemini services, run engine, capture compiler
 - `apps/agent`: Stagehand-compatible autonomous browser agent service
 - `apps/sandbox`: visible Chromium sandbox for live noVNC playback
@@ -50,6 +51,18 @@ Or run both together:
 npm run dev
 ```
 
+Open the Remotion studio:
+
+```bash
+npm run video:dev
+```
+
+Render the current Memoo video composition:
+
+```bash
+npm run video:render
+```
+
 Seed demo data:
 
 ```bash
@@ -62,6 +75,8 @@ make seed
 - `npm run web:dev`
 - `npm run web:build`
 - `npm run web:lint`
+- `npm run video:dev`
+- `npm run video:render`
 - `npm run api:dev`
 - `npm run api:seed`
 - `npm run db:up`

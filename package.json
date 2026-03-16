@@ -4,15 +4,19 @@
   "private": true,
   "workspaces": [
     "apps/web",
+    "apps/video",
     "packages/*"
   ],
   "scripts": {
-    "setup": "npm run web:install && npm run api:install",
+    "setup": "npm run web:install && npm run video:install && npm run api:install",
     "dev": "concurrently -k -n api,web -c green,cyan \"npm run api:dev\" \"npm run web:dev\"",
     "web:install": "npm install --workspace @memoo/web",
     "web:dev": "npm run dev --workspace @memoo/web",
     "web:build": "npm run build --workspace @memoo/web",
     "web:lint": "npm run lint --workspace @memoo/web",
+    "video:install": "npm install --workspace @memoo/video",
+    "video:dev": "npm run dev --workspace @memoo/video",
+    "video:render": "npm run render --workspace @memoo/video",
     "api:install": "cd apps/api && python -m venv .venv && . .venv/bin/activate && pip install -e .",
     "api:dev": "cd apps/api && . .venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
     "api:seed": "cd apps/api && . .venv/bin/activate && python scripts/seed_demo.py",

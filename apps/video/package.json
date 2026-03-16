@@ -1,0 +1,22 @@
+{
+  "name": "@memoo/video",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts MemooBrandStory out/memoo-brand-story.mp4"
+  },
+  "dependencies": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.436"
+  },
+  "devDependencies": {
+    "@remotion/cli": "4.0.436",
+    "@remotion/fonts": "4.0.436",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}
