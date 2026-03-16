@@ -58,11 +58,17 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
     }
   }
 
+  const STATUS_CLASSES: Record<string, string> = {
+    active: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    archived: 'bg-amber-50 text-amber-700 border-amber-100',
+    draft: 'bg-slate-50 text-slate-700 border-slate-100',
+  };
+
   if (editing) {
     return (
       <div className="panel mt-6 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-bold tracking-tight">Edit playbook</h2>
+          <h2 className="text-lg font-bold">Edit playbook</h2>
           <button
             onClick={() => {
               setEditing(false);
@@ -74,43 +80,40 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
                 tags: playbook.tags.join(', '),
               });
             }}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--app-line)] text-[var(--app-muted)] hover:bg-[var(--app-surface-2)]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--app-line-soft)] text-[var(--app-muted)] hover:bg-[rgba(27,42,74,0.03)]"
           >
             <X size={14} weight="bold" />
           </button>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium">
-            Folder
+          <div className="grid gap-1">
+            <label className="text-xs font-medium text-[var(--app-muted)]">Folder</label>
             <select
               className="input"
               value={form.folderId}
               onChange={e => setForm(prev => ({ ...prev, folderId: e.target.value }))}
             >
-              <option value="">Uncategorized</option>
+              <option value="">Uncategorized (Inbox)</option>
               {folders.map(folder => (
                 <option key={folder.id} value={folder.id}>{folder.name}</option>
               ))}
             </select>
-            <span className="text-xs font-normal text-[var(--app-muted)]">
-              {selectedFolder ? 'This playbook will stay grouped with the selected folder.' : 'No folder means the playbook returns to Inbox.'}
-            </span>
-          </label>
-          <label className="grid gap-2 text-sm font-medium md:col-span-2">
-            Name
+          </div>
+          <div className="grid gap-1 md:col-span-2">
+            <label className="text-xs font-medium text-[var(--app-muted)]">Name</label>
             <input className="input" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} />
-          </label>
-          <label className="grid gap-2 text-sm font-medium md:col-span-2">
-            Description
+          </div>
+          <div className="grid gap-1 md:col-span-2">
+            <label className="text-xs font-medium text-[var(--app-muted)]">Description</label>
             <textarea
               className="input min-h-[80px] resize-y"
               value={form.description}
               onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
               placeholder="What does this playbook do?"
             />
-          </label>
-          <label className="grid gap-2 text-sm font-medium">
-            Status
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs font-medium text-[var(--app-muted)]">Status</label>
             <select
               className="input"
               value={form.status}
@@ -120,42 +123,49 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
               <option value="active">Active</option>
               <option value="archived">Archived</option>
             </select>
-          </label>
-          <label className="grid gap-2 text-sm font-medium">
-            Tags
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs font-medium text-[var(--app-muted)]">Tags</label>
             <input
               className="input"
               value={form.tags}
               onChange={e => setForm(prev => ({ ...prev, tags: e.target.value }))}
               placeholder="ops, automation, hr"
             />
-            <span className="text-xs text-[var(--app-muted)]">Comma-separated.</span>
-          </label>
+          </div>
         </div>
-        {selectedFolder ? (
+        
+        {selectedFolder && (
           <div
-            className="mt-4 rounded-[1.4rem] border px-4 py-3"
+            className="mt-4 rounded-xl border px-4 py-3"
             style={{
               borderColor: selectedFolderToken.border,
               backgroundColor: selectedFolderToken.soft,
             }}
           >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: selectedFolderToken.text }}>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: selectedFolderToken.text }}>
               Current folder
             </p>
-            <p className="mt-1 text-sm font-semibold text-[var(--app-text)]">{selectedFolder.name}</p>
+            <p className="mt-0.5 text-sm font-bold text-[var(--app-text)]">{selectedFolder.name}</p>
           </div>
-        ) : null}
+        )}
+
         <div className="mt-5 flex gap-3">
           <button
             onClick={save}
             disabled={saving}
-            className="btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
+            className="btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm"
           >
-            {saving ? <span className="animate-spin inline-flex"><CircleNotch size={14} /></span> : <FloppyDisk size={14} weight="bold" />}
+            {saving ? (
+              <span className="flex animate-spin">
+                <CircleNotch size={14} />
+              </span>
+            ) : (
+              <FloppyDisk size={14} weight="bold" />
+            )}
             {saving ? 'Saving…' : 'Save changes'}
           </button>
-          <button onClick={() => setEditing(false)} className="btn-secondary rounded-full px-4 py-2 text-sm">
+          <button onClick={() => setEditing(false)} className="rounded-lg border border-[var(--app-line-soft)] px-4 py-1.5 text-sm font-semibold hover:bg-[rgba(27,42,74,0.03)]">
             Cancel
           </button>
         </div>
@@ -166,22 +176,15 @@ export function PlaybookActions({ playbook: initial, teamId }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span
-        className={[
-          'rounded-full border px-3 py-1 text-xs font-bold capitalize',
-          playbook.status === 'active'
-            ? 'border-[rgba(123,155,134,0.4)] bg-[rgba(123,155,134,0.18)] text-[#335443]'
-            : playbook.status === 'archived'
-              ? 'border-[rgba(191,155,106,0.42)] bg-[rgba(191,155,106,0.18)] text-[#7d5d31]'
-              : 'border-[rgba(95,119,132,0.32)] bg-[rgba(95,119,132,0.14)] text-[#3f5e6f]',
-        ].join(' ')}
+        className={`rounded-md border px-2.5 py-0.5 text-[10px] font-bold uppercase ${STATUS_CLASSES[playbook.status] || STATUS_CLASSES.draft}`}
       >
         {playbook.status}
       </span>
       <button
         onClick={() => setEditing(true)}
-        className="btn-secondary inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs"
+        className="rounded-lg border border-[var(--app-line-soft)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--app-muted)] hover:bg-[rgba(27,42,74,0.03)] transition-colors inline-flex items-center gap-1.5"
       >
-        <Pencil size={12} weight="bold" /> Edit
+        <Pencil size={12} weight="bold" /> Edit Details
       </button>
     </div>
   );
