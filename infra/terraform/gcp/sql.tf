@@ -7,13 +7,13 @@ resource "google_sql_database_instance" "main" {
   name                = "${local.name_prefix}-postgres"
   project             = var.project_id
   region              = var.region
-  database_version    = "POSTGRES_16"
+  database_version    = var.db_version
   deletion_protection = var.db_deletion_protection
 
   settings {
     tier              = var.db_tier
     availability_type = "ZONAL"
-    disk_type         = "PD_SSD"
+    disk_type         = var.db_disk_type
     disk_size         = var.db_disk_size_gb
     disk_autoresize   = true
 

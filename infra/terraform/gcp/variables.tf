@@ -21,6 +21,24 @@ variable "prefix" {
   default     = "memoo"
 }
 
+variable "billing_account_id" {
+  description = "Billing account ID used for budget alerts."
+  type        = string
+  default     = ""
+}
+
+variable "enable_budget" {
+  description = "Whether to create a monthly billing budget with alert thresholds."
+  type        = bool
+  default     = false
+}
+
+variable "monthly_budget_amount_usd" {
+  description = "Monthly budget amount in USD for cost alerts."
+  type        = number
+  default     = 80
+}
+
 variable "labels" {
   description = "Common labels applied to supported resources."
   type        = map(string)
@@ -48,6 +66,12 @@ variable "db_name" {
   default     = "memoo"
 }
 
+variable "db_version" {
+  description = "Cloud SQL PostgreSQL version."
+  type        = string
+  default     = "POSTGRES_16"
+}
+
 variable "db_user" {
   description = "Cloud SQL application user."
   type        = string
@@ -57,13 +81,19 @@ variable "db_user" {
 variable "db_tier" {
   description = "Cloud SQL machine tier."
   type        = string
-  default     = "db-custom-1-3840"
+  default     = "db-g1-small"
 }
 
 variable "db_disk_size_gb" {
   description = "Cloud SQL disk size."
   type        = number
-  default     = 20
+  default     = 10
+}
+
+variable "db_disk_type" {
+  description = "Cloud SQL disk type."
+  type        = string
+  default     = "PD_HDD"
 }
 
 variable "db_deletion_protection" {
@@ -131,13 +161,13 @@ variable "vpc_connector_cidr" {
 variable "sandbox_machine_type" {
   description = "Machine type for the sandbox VM."
   type        = string
-  default     = "e2-standard-2"
+  default     = "e2-medium"
 }
 
 variable "sandbox_boot_disk_size_gb" {
   description = "Boot disk size for the sandbox VM."
   type        = number
-  default     = 30
+  default     = 20
 }
 
 variable "sandbox_resolution" {
@@ -176,6 +206,12 @@ variable "api_memory" {
   default     = "1Gi"
 }
 
+variable "api_max_instances" {
+  description = "Maximum instance count for the API Cloud Run service."
+  type        = number
+  default     = 2
+}
+
 variable "web_cpu" {
   description = "CPU allocation for the web Cloud Run service."
   type        = string
@@ -186,4 +222,28 @@ variable "web_memory" {
   description = "Memory allocation for the web Cloud Run service."
   type        = string
   default     = "512Mi"
+}
+
+variable "web_max_instances" {
+  description = "Maximum instance count for the web Cloud Run service."
+  type        = number
+  default     = 2
+}
+
+variable "vpc_connector_machine_type" {
+  description = "Machine type for the Serverless VPC Access connector."
+  type        = string
+  default     = "e2-micro"
+}
+
+variable "vpc_connector_min_instances" {
+  description = "Minimum number of connector instances."
+  type        = number
+  default     = 2
+}
+
+variable "vpc_connector_max_instances" {
+  description = "Maximum number of connector instances."
+  type        = number
+  default     = 3
 }

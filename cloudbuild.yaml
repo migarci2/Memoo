@@ -1,0 +1,43 @@
+substitutions:
+  _REGION: europe-west1
+  _ZONE: europe-west1-b
+  _PREFIX: memoo
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    id: deploy
+    entrypoint: bash
+    env:
+      - PROJECT_ID=$PROJECT_ID
+      - REGION=${_REGION}
+      - ZONE=${_ZONE}
+      - PREFIX=${_PREFIX}
+      - TF_STATE_BUCKET=${PROJECT_ID}-${_PREFIX}-tfstate
+      - TF_VARS_FILE=terraform.tfvars
+      - AUTO_APPROVE=true
+      - GOOGLE_API_KEY=${_GOOGLE_API_KEY}
+      - NEXT_PUBLIC_GEMINI_API_KEY=${_NEXT_PUBLIC_GEMINI_API_KEY}
+    args:
+      - -lc
+      - |
+        set -Eeuo pipefail
+        apt-get update
+        apt-get install -y curl unzip git
+
+        TERRAFORM_VERSION=1.11.4
+        curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+        unzip -q /tmp/terraform.zip -d /usr/local/bin
+        chmod +x /usr/local/bin/terraform
+
+        gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+        ./scripts/gcp/bootstrap_tf_state.sh
+
+        if [ ! -f infra/terraform/gcp/terraform.tfvars ]; then
+          cp infra/terraform/gcp/terraform.tfvars.example infra/terraform/gcp/terraform.tfvars
+        fi
+
+        ./scripts/gcp/deploy.sh

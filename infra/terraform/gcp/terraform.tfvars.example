@@ -1,10 +1,28 @@
 project_id = "my-gcp-project"
 region     = "europe-west1"
 zone       = "europe-west1-b"
+billing_account_id = "000000-000000-000000"
+enable_budget      = true
+monthly_budget_amount_usd = 80
 
 api_image     = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-api:latest"
 web_image     = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-web:latest"
 sandbox_image = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-sandbox:latest"
+
+db_version      = "POSTGRES_16"
+db_tier         = "db-g1-small"
+db_disk_type    = "PD_HDD"
+db_disk_size_gb = 10
+
+sandbox_machine_type       = "e2-medium"
+sandbox_boot_disk_size_gb  = 20
+
+api_max_instances = 2
+web_max_instances = 2
+
+vpc_connector_machine_type = "e2-micro"
+vpc_connector_min_instances = 2
+vpc_connector_max_instances = 3
 
 # If you leave this empty, Terraform will expose the sandbox via
 # https://<reserved-ip>.sslip.io and Caddy will request TLS automatically.

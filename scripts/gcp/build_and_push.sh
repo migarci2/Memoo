@@ -14,6 +14,22 @@ BASE_IMAGE_PATH="${REGISTRY_HOST}/${PROJECT_ID}/${REPOSITORY}"
 
 gcloud auth configure-docker "${REGISTRY_HOST}" --quiet
 
+gcloud services enable \
+  artifactregistry.googleapis.com \
+  --project="${PROJECT_ID}" \
+  --quiet
+
+if ! gcloud artifacts repositories describe "${REPOSITORY}" \
+  --project="${PROJECT_ID}" \
+  --location="${REGION}" \
+  >/dev/null 2>&1; then
+  gcloud artifacts repositories create "${REPOSITORY}" \
+    --project="${PROJECT_ID}" \
+    --location="${REGION}" \
+    --repository-format=docker \
+    --description="Container images for ${PREFIX}"
+fi
+
 docker build \
   -f "${ROOT_DIR}/apps/api/Dockerfile.prod" \
   -t "${BASE_IMAGE_PATH}/memoo-api:${TAG}" \

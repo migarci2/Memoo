@@ -17,6 +17,20 @@ API_IMAGE="${API_IMAGE:-${BASE_IMAGE_PATH}/memoo-api:${TAG}}"
 WEB_IMAGE="${WEB_IMAGE:-${BASE_IMAGE_PATH}/memoo-web:${TAG}}"
 SANDBOX_IMAGE="${SANDBOX_IMAGE:-${BASE_IMAGE_PATH}/memoo-sandbox:${TAG}}"
 
+gcloud services enable \
+  artifactregistry.googleapis.com \
+  billingbudgets.googleapis.com \
+  cloudbilling.googleapis.com \
+  compute.googleapis.com \
+  iam.googleapis.com \
+  run.googleapis.com \
+  secretmanager.googleapis.com \
+  sqladmin.googleapis.com \
+  storage.googleapis.com \
+  vpcaccess.googleapis.com \
+  --project="${PROJECT_ID}" \
+  --quiet
+
 "${ROOT_DIR}/scripts/gcp/build_and_push.sh"
 
 cd "${TF_DIR}"

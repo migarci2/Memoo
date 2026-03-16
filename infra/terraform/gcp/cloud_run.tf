@@ -14,7 +14,7 @@ resource "google_cloud_run_v2_service" "api" {
 
     scaling {
       min_instance_count = 0
-      max_instance_count = 5
+      max_instance_count = var.api_max_instances
     }
 
     vpc_access {
@@ -75,7 +75,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name  = "DB_PASSWORD"
+        name = "DB_PASSWORD"
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.db_password.secret_id
@@ -110,7 +110,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name  = "GOOGLE_API_KEY"
+        name = "GOOGLE_API_KEY"
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.google_api_key.secret_id
@@ -156,7 +156,7 @@ resource "google_cloud_run_v2_service" "web" {
 
     scaling {
       min_instance_count = 0
-      max_instance_count = 5
+      max_instance_count = var.web_max_instances
     }
 
     containers {

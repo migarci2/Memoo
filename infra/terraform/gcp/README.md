@@ -31,6 +31,7 @@ That combination does not fit well into a single serverless service. The Terrafo
 - `scripts/gcp/bootstrap_tf_state.sh`: creates the GCS bucket for remote Terraform state
 - `scripts/gcp/build_and_push.sh`: builds and pushes `web`, `api`, and `sandbox`
 - `scripts/gcp/deploy.sh`: end-to-end build + terraform apply
+- `cloudbuild.yaml`: managed pipeline that runs the same deploy flow inside Google Cloud Build
 
 ## Prerequisites
 
@@ -73,6 +74,8 @@ export AUTO_APPROVE=true
 ./scripts/gcp/deploy.sh
 ```
 
+`build_and_push.sh` now creates the Artifact Registry repository automatically if it does not exist yet, so the very first deploy can use the same command.
+
 If you prefer, build and push separately:
 
 ```bash
@@ -84,6 +87,22 @@ cd infra/terraform/gcp
 terraform init -backend-config="bucket=${PROJECT_ID}-memoo-tfstate" -backend-config="prefix=memoo/gcp"
 terraform apply -var-file=terraform.tfvars
 ```
+
+## Fast path with Cloud Build
+
+If you want to avoid installing `terraform` locally, you can run the deployment entirely in Google Cloud Build:
+
+```bash
+gcloud builds submit \
+  --config cloudbuild.yaml \
+  --substitutions=_REGION=europe-west1,_ZONE=europe-west1-b,_PREFIX=memoo,_GOOGLE_API_KEY=your-key,_NEXT_PUBLIC_GEMINI_API_KEY=your-key
+```
+
+Notes:
+
+- The pipeline bootstraps the Terraform state bucket automatically.
+- If `infra/terraform/gcp/terraform.tfvars` is already committed or present in the workspace, Cloud Build uses it.
+- If `terraform.tfvars` is missing, the pipeline copies `terraform.tfvars.example` first, so you should still override the important values either in that file or via script environment.
 
 ## Important notes
 

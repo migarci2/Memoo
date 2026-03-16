@@ -52,3 +52,8 @@ output "cloudsql_connection_name" {
   description = "Cloud SQL connection name used by Cloud Run."
   value       = google_sql_database_instance.main.connection_name
 }
+
+output "monthly_budget_name" {
+  description = "Billing budget resource name, if enabled."
+  value       = try(google_billing_budget.monthly[0].name, null)
+}

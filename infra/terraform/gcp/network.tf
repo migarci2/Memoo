@@ -21,6 +21,9 @@ resource "google_vpc_access_connector" "serverless" {
   region        = var.region
   network       = google_compute_network.main.name
   ip_cidr_range = var.vpc_connector_cidr
+  machine_type  = var.vpc_connector_machine_type
+  min_instances = var.vpc_connector_min_instances
+  max_instances = var.vpc_connector_max_instances
 
   depends_on = [google_project_service.required]
 }
