@@ -1,6 +1,6 @@
 # Memoo
 
-![Memoo demo](./docs/assets/memo.gif)
+![Memoo demo](./videos/memoo.gif)
 
 Memoo is a browser workflow recorder and runner for teams that do the same UI work over and over.
 
