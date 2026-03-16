@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
-import { DEMO_CREDENTIALS, DEMO_INVITE_CODE } from '@/lib/demo-access';
+import { DEMO_CREDENTIALS, DEMO_INVITE_CODES } from '@/lib/demo-access';
 
 function LoginForm() {
   const router = useRouter();
@@ -29,7 +29,7 @@ function LoginForm() {
       setError('Enter the guest invite code.');
       return;
     }
-    if (inviteCode.trim() !== DEMO_INVITE_CODE) {
+    if (!DEMO_INVITE_CODES.includes(inviteCode.trim())) {
       setError('Invalid guest invite code.');
       return;
     }
@@ -120,9 +120,6 @@ function LoginForm() {
               {loading ? 'Entering…' : 'Enter the demo'}
             </button>
 
-            <p className="mt-4 text-center text-[11px] text-[var(--app-muted)]">
-              Demo Northline Operations
-            </p>
           </div>
 
           <p className="mt-5 text-center text-sm text-[var(--app-muted)]">

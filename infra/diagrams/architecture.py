@@ -13,6 +13,7 @@ from diagrams.gcp.network import CDN, Router, VirtualPrivateCloud
 from diagrams.gcp.operations import Logging, Monitoring
 from diagrams.gcp.security import Iam, SecretManager
 from diagrams.gcp.storage import GCS
+from diagrams.gcp.ml import VertexAI
 from diagrams.onprem.client import User
 
 
@@ -63,6 +64,11 @@ with Diagram(
 
             web >> Edge(color="#3768d9", penwidth="1.8", label="/api/proxy") >> api
 
+        with Cluster("AI Integration"):
+            gemini = VertexAI("Google Vertex AI\nGemini Model")
+            api >> Edge(color="#ff6d00", penwidth="2.0", label="live interaction\n+ code generation") >> gemini
+            gemini >> Edge(color="#ff6d00", penwidth="2.0", label="AI responses") >> api
+
         with Cluster("Private Connectivity"):
             vpc = VirtualPrivateCloud("VPC\nmemoo-vpc")
             connector = Router("Serverless VPC Access\n10.10.1.0/28")
@@ -78,6 +84,7 @@ with Diagram(
             connector >> Edge(color="#4d5b75", penwidth="1.5", label="Cloud SQL socket") >> sql
             connector >> Edge(color="#4d5b75", penwidth="1.5", label="CDP :9223") >> sandbox
             api >> Edge(color="#2f7d57", penwidth="1.3", label="evidence read/write") >> bucket
+            api >> Edge(color="#ff6d00", penwidth="1.5", label="Gemini API key") >> secrets
             api >> Edge(color="#4d5b75", penwidth="1.5", label="secret access") >> secrets
 
         with Cluster("Platform Operations"):

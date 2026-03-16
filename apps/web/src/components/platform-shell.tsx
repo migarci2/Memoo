@@ -133,13 +133,6 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
               <div className="group/logo logo-wiggle cursor-pointer">
                 <Logo />
               </div>
-              <Link
-                href="/"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--app-line-soft)] text-[var(--app-muted)] transition-colors hover:text-[var(--app-text)]"
-                title="Back to Landing"
-              >
-                <ArrowSquareOut size={14} weight="bold" />
-              </Link>
             </div>
 
             {showAuthenticatedUi ? (
