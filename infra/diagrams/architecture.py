@@ -9,34 +9,33 @@ from diagrams import Cluster, Diagram, Edge
 from diagrams.gcp.compute import CloudRun, ComputeEngine
 from diagrams.gcp.database import SQL
 from diagrams.gcp.devtools import ContainerRegistry
-from diagrams.gcp.network import CDN, Router, VirtualPrivateCloud
+from diagrams.gcp.network import CDN, VirtualPrivateCloud
 from diagrams.gcp.operations import Logging, Monitoring
 from diagrams.gcp.security import Iam, SecretManager
 from diagrams.gcp.storage import GCS
-from diagrams.onprem.client import User
+from diagrams.gcp.ml import VertexAI
+from diagrams.onprem.client import Users
 
 
 GRAPH_ATTR = {
     "bgcolor": "white",
-    "pad": "0.45",
-    "nodesep": "0.7",
-    "ranksep": "0.9",
-    "splines": "ortho",
-    "compound": "true",
-    "newrank": "true",
+    "pad": "1.5",
+    "nodesep": "1.5",
+    "ranksep": "2.0",
+    "splines": "curved",
     "fontname": "Helvetica",
-    "fontsize": "22",
+    "fontsize": "18",
     "labelloc": "t",
 }
 
 NODE_ATTR = {
     "fontname": "Helvetica",
-    "fontsize": "12",
+    "fontsize": "11",
 }
 
 EDGE_ATTR = {
     "fontname": "Helvetica",
-    "fontsize": "10",
+    "fontsize": "9",
 }
 
 with Diagram(
@@ -49,59 +48,68 @@ with Diagram(
     node_attr=NODE_ATTR,
     edge_attr=EDGE_ATTR,
 ):
-    users = User("Workspace users")
-    ops_team = User("Platform team")
-    internet = CDN("Public HTTPS access")
+    # External Entry
+    users = Users("End Users")
+    cdn = CDN("Cloud CDN\nHTTPS")
+    
+    users >> Edge(color="#1f77b4", penwidth="2.5") >> cdn
 
-    users >> Edge(color="#3768d9", penwidth="1.8", label="app + live browser") >> internet
+    with Cluster("Google Cloud Platform", graph_attr={"style": "filled", "bgcolor": "#f0f8ff", "fontsize": "14"}):
+        
+        # Frontend
+        frontend = CloudRun("Frontend\nCloud Run\n(Next.js)")
+        cdn >> Edge(color="#1f77b4", penwidth="2.5") >> frontend
 
-    with Cluster("Google Cloud Project"):
-        with Cluster("Product Surface"):
-            web = CloudRun("Cloud Run\nmemoo-web\nNext.js frontend")
-            api = CloudRun("Cloud Run\nmemoo-api\nFastAPI backend")
-            sandbox = ComputeEngine("Compute Engine VM\nmemoo-sandbox\nVisible browser + noVNC")
+        # Backend
+        backend = CloudRun("Backend\nCloud Run\n(FastAPI)")
+        frontend >> Edge(color="#1f77b4", penwidth="2.0") >> backend
 
-            web >> Edge(color="#3768d9", penwidth="1.8", label="/api/proxy") >> api
+        # Sandbox
+        sandbox = ComputeEngine("Sandbox VM\nCompute Engine\n(Playwright)")
 
-        with Cluster("Private Connectivity"):
-            vpc = VirtualPrivateCloud("VPC\nmemoo-vpc")
-            connector = Router("Serverless VPC Access\n10.10.1.0/28")
+        # AI Service
+        ai = VertexAI("AI Engine\nVertex AI\n(Gemini)")
 
-            api >> Edge(color="#4d5b75", penwidth="1.5", label="private egress") >> connector
-            vpc - Edge(style="invis") - connector
+        # Databases & Storage
+        db = SQL("Database\nCloud SQL")
+        storage = GCS("Storage\nCloud Storage")
+        secrets = SecretManager("Secrets\nSecret Manager")
 
-        with Cluster("Data Plane"):
-            sql = SQL("Cloud SQL\nPostgreSQL 16\ndb-g1-small")
-            bucket = GCS("Cloud Storage\nEvidence bucket")
-            secrets = SecretManager("Secret Manager\nDB password + Gemini key")
+        # Operations
+        registry = ContainerRegistry("Registry\nArtifact Registry")
+        iam = Iam("IAM\nService Accounts")
+        logging = Logging("Logging\nCloud Logging")
+        monitoring = Monitoring("Monitoring\nCloud Monitoring")
 
-            connector >> Edge(color="#4d5b75", penwidth="1.5", label="Cloud SQL socket") >> sql
-            connector >> Edge(color="#4d5b75", penwidth="1.5", label="CDP :9223") >> sandbox
-            api >> Edge(color="#2f7d57", penwidth="1.3", label="evidence read/write") >> bucket
-            api >> Edge(color="#4d5b75", penwidth="1.5", label="secret access") >> secrets
+        # VPC Network (background concept)
+        vpc = VirtualPrivateCloud("VPC Network")
 
-        with Cluster("Platform Operations"):
-            registry = ContainerRegistry("Artifact Registry\nmemoo-containers")
-            iam = Iam("Service identities\nweb / api / sandbox")
-            logging = Logging("Cloud Logging")
-            monitoring = Monitoring("Monitoring + cost alerts")
+        # Main Backend Connections
+        backend >> Edge(color="#2ca02c", penwidth="2.0") >> sandbox
+        backend >> Edge(color="#ff6600", penwidth="2.0") >> ai
+        ai >> Edge(color="#ff6600", penwidth="2.0") >> backend
 
-            registry >> Edge(color="#a66b00", style="dashed", penwidth="1.3", label="image pull") >> web
-            registry >> Edge(color="#a66b00", style="dashed", penwidth="1.3", label="image pull") >> api
-            registry >> Edge(color="#a66b00", style="dashed", penwidth="1.3", label="image pull") >> sandbox
+        # Data Access Layer
+        backend >> Edge(color="#d62728", penwidth="1.8") >> db
+        backend >> Edge(color="#d62728", penwidth="1.8") >> storage
+        backend >> Edge(color="#9467bd", penwidth="1.5") >> secrets
 
-            iam >> Edge(color="#a66b00", style="dashed", penwidth="1.3", label="runtime identity") >> web
-            iam >> Edge(color="#a66b00", style="dashed", penwidth="1.3", label="runtime identity") >> api
-            iam >> Edge(color="#a66b00", style="dashed", penwidth="1.3", label="runtime identity") >> sandbox
+        # Deployment & Security
+        registry >> Edge(color="#bcbd22", style="dashed", penwidth="1.2") >> frontend
+        registry >> Edge(color="#bcbd22", style="dashed", penwidth="1.2") >> backend
+        registry >> Edge(color="#bcbd22", style="dashed", penwidth="1.2") >> sandbox
 
-            web >> Edge(color="#2f7d57", penwidth="1.3", label="telemetry") >> logging
-            api >> Edge(color="#2f7d57", penwidth="1.3", label="telemetry") >> logging
-            sandbox >> Edge(color="#2f7d57", penwidth="1.3", label="telemetry") >> logging
+        iam >> Edge(color="#7f7f7f", style="dashed", penwidth="1.2") >> frontend
+        iam >> Edge(color="#7f7f7f", style="dashed", penwidth="1.2") >> backend
+        iam >> Edge(color="#7f7f7f", style="dashed", penwidth="1.2") >> sandbox
 
-            web >> Edge(color="#2f7d57", penwidth="1.3", label="metrics") >> monitoring
-            api >> Edge(color="#2f7d57", penwidth="1.3", label="metrics") >> monitoring
-            sandbox >> Edge(color="#2f7d57", penwidth="1.3", label="metrics") >> monitoring
+        # Observability
+        frontend >> Edge(color="#17becf", penwidth="1.2") >> logging
+        backend >> Edge(color="#17becf", penwidth="1.2") >> logging
+        sandbox >> Edge(color="#17becf", penwidth="1.2") >> logging
+        logging >> Edge(color="#17becf", penwidth="1.2") >> monitoring
 
-    internet >> Edge(color="#3768d9", penwidth="1.8", label="frontend") >> web
-    internet >> Edge(color="#3768d9", penwidth="1.8", label="live session") >> sandbox
-    monitoring >> Edge(color="#2f7d57", penwidth="1.3", label="alerts") >> ops_team
+        # VPC connections (invisible backbone)
+        vpc >> Edge(style="invis") >> db
+        vpc >> Edge(style="invis") >> storage
+        vpc >> Edge(style="invis") >> secrets
