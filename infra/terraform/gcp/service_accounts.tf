@@ -10,6 +10,12 @@ resource "google_service_account" "web" {
   display_name = "memoo web runtime"
 }
 
+resource "google_service_account" "agent" {
+  project      = var.project_id
+  account_id   = "${local.name_prefix}-agent"
+  display_name = "memoo agent runtime"
+}
+
 resource "google_service_account" "sandbox" {
   project      = var.project_id
   account_id   = "${local.name_prefix}-sandbox"
@@ -32,6 +38,12 @@ resource "google_service_account_iam_member" "api_token_creator" {
   service_account_id = google_service_account.api.name
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = "serviceAccount:${google_service_account.api.email}"
+}
+
+resource "google_project_iam_member" "agent_secret_accessor" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.agent.email}"
 }
 
 resource "google_project_iam_member" "sandbox_artifact_reader" {

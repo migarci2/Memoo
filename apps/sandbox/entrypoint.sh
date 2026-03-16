@@ -112,6 +112,8 @@ runuser -u "${SANDBOX_USER}" -- env \
   DISPLAY="${DISPLAY}" \
   chromium \
     --no-first-run \
+    --no-sandbox \
+    --disable-setuid-sandbox \
     --disable-gpu \
     --test-type \
     --disable-infobars \

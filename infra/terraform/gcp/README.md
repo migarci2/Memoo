@@ -4,6 +4,7 @@ This stack adapts the current monorepo to GCP with a split that matches the app'
 
 - `apps/web` -> `Cloud Run`
 - `apps/api` -> `Cloud Run`
+- `apps/agent` -> `Cloud Run`
 - PostgreSQL -> `Cloud SQL for PostgreSQL`
 - MinIO -> `Google Cloud Storage`
 - Visible browser sandbox -> `Compute Engine` VM running the existing sandbox container
@@ -29,7 +30,7 @@ That combination does not fit well into a single serverless service. The Terrafo
 
 - `infra/terraform/gcp`: Terraform stack
 - `scripts/gcp/bootstrap_tf_state.sh`: creates the GCS bucket for remote Terraform state
-- `scripts/gcp/build_and_push.sh`: builds and pushes `web`, `api`, and `sandbox`
+- `scripts/gcp/build_and_push.sh`: builds and pushes `web`, `api`, `agent`, and `sandbox`
 - `scripts/gcp/deploy.sh`: end-to-end build + terraform apply
 - `cloudbuild.yaml`: managed pipeline that runs the same deploy flow inside Google Cloud Build
 
@@ -61,6 +62,7 @@ cp infra/terraform/gcp/terraform.tfvars.example infra/terraform/gcp/terraform.tf
 - `project_id`
 - `api_image`
 - `web_image`
+- `agent_image`
 - `sandbox_image`
 - `google_api_key`
 
@@ -75,6 +77,8 @@ export AUTO_APPROVE=true
 ```
 
 `build_and_push.sh` now creates the Artifact Registry repository automatically if it does not exist yet, so the very first deploy can use the same command.
+`deploy.sh` imports that repository into Terraform state automatically if the build step created it first.
+`deploy.sh` also sets the Application Default Credentials quota project to reduce budget-creation failures when you deploy with user credentials.
 
 If you prefer, build and push separately:
 

@@ -2,6 +2,70 @@ locals {
   api_public_base_url = "${google_cloud_run_v2_service.api.uri}/api"
 }
 
+resource "google_cloud_run_v2_service" "agent" {
+  name     = local.agent_service_name
+  project  = var.project_id
+  location = var.region
+  ingress  = "INGRESS_TRAFFIC_ALL"
+
+  template {
+    service_account = google_service_account.agent.email
+    timeout         = "300s"
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = var.agent_max_instances
+    }
+
+    vpc_access {
+      connector = google_vpc_access_connector.serverless.id
+      egress    = "PRIVATE_RANGES_ONLY"
+    }
+
+    containers {
+      image = var.agent_image
+
+      ports {
+        container_port = 8787
+      }
+
+      resources {
+        limits = {
+          cpu    = var.agent_cpu
+          memory = var.agent_memory
+        }
+      }
+
+      env {
+        name = "GOOGLE_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.google_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "GEMINI_MODEL"
+        value = var.gemini_model
+      }
+
+      env {
+        name  = "STAGEHAND_MODEL"
+        value = local.effective_stagehand_model
+      }
+    }
+  }
+
+  labels = local.common_labels
+
+  depends_on = [
+    google_project_iam_member.agent_secret_accessor,
+    google_secret_manager_secret_version.google_api_key,
+  ]
+}
+
 resource "google_cloud_run_v2_service" "api" {
   name     = local.api_service_name
   project  = var.project_id
@@ -125,6 +189,21 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
+        name  = "STAGEHAND_ENABLED"
+        value = "true"
+      }
+
+      env {
+        name  = "STAGEHAND_SERVICE_URL"
+        value = google_cloud_run_v2_service.agent.uri
+      }
+
+      env {
+        name  = "STAGEHAND_MODEL"
+        value = local.effective_stagehand_model
+      }
+
+      env {
         name  = "SANDBOX_CDP_URL"
         value = "http://${google_compute_instance.sandbox.network_interface[0].network_ip}:9223"
       }
@@ -140,6 +219,7 @@ resource "google_cloud_run_v2_service" "api" {
     google_service_account_iam_member.api_token_creator,
     google_secret_manager_secret_version.db_password,
     google_secret_manager_secret_version.google_api_key,
+    google_cloud_run_v2_service.agent,
     google_compute_instance.sandbox,
   ]
 }
@@ -217,6 +297,14 @@ resource "google_cloud_run_v2_service_iam_member" "api_public" {
   project  = var.project_id
   location = var.region
   name     = google_cloud_run_v2_service.api.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+resource "google_cloud_run_v2_service_iam_member" "agent_public" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.agent.name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }

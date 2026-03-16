@@ -73,53 +73,6 @@ function cx(...names: Array<string | false | null | undefined>) {
   return names.filter(Boolean).map(name => styles[name as string]).join(' ');
 }
 
-/* ── Decorative floating SVGs ── */
-function BrowserWindowSvg({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg className={className} style={style} width="120" height="88" viewBox="0 0 120 88" fill="none">
-      <rect x="1" y="1" width="118" height="86" rx="12" stroke="currentColor" strokeWidth="1.5" opacity="0.18" />
-      <line x1="1" y1="22" x2="119" y2="22" stroke="currentColor" strokeWidth="1" opacity="0.12" />
-      <circle cx="16" cy="12" r="3" fill="currentColor" opacity="0.12" />
-      <circle cx="26" cy="12" r="3" fill="currentColor" opacity="0.1" />
-      <circle cx="36" cy="12" r="3" fill="currentColor" opacity="0.08" />
-      <rect x="16" y="32" width="88" height="6" rx="3" fill="currentColor" opacity="0.07" />
-      <rect x="16" y="46" width="64" height="6" rx="3" fill="currentColor" opacity="0.05" />
-      <rect x="16" y="60" width="76" height="6" rx="3" fill="currentColor" opacity="0.05" />
-    </svg>
-  );
-}
-
-function CursorSvg({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg className={className} style={style} width="24" height="30" viewBox="0 0 24 30" fill="none">
-      <path d="M4 2 L4 24 L10 18 L17 26 L20 24 L14 16 L22 14 Z" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.2" />
-    </svg>
-  );
-}
-
-function ListSvg({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg className={className} style={style} width="80" height="72" viewBox="0 0 80 72" fill="none">
-      <rect x="1" y="1" width="78" height="70" rx="10" stroke="currentColor" strokeWidth="1.5" opacity="0.15" />
-      <circle cx="18" cy="20" r="4" fill="currentColor" opacity="0.1" />
-      <rect x="28" y="17" width="40" height="5" rx="2.5" fill="currentColor" opacity="0.08" />
-      <circle cx="18" cy="36" r="4" fill="currentColor" opacity="0.1" />
-      <rect x="28" y="33" width="32" height="5" rx="2.5" fill="currentColor" opacity="0.08" />
-      <circle cx="18" cy="52" r="4" fill="currentColor" opacity="0.1" />
-      <rect x="28" y="49" width="44" height="5" rx="2.5" fill="currentColor" opacity="0.08" />
-    </svg>
-  );
-}
-
-function PlaySvg({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg className={className} style={style} width="44" height="44" viewBox="0 0 44 44" fill="none">
-      <circle cx="22" cy="22" r="21" stroke="currentColor" strokeWidth="1.5" opacity="0.14" />
-      <path d="M17 13 L17 31 L33 22 Z" fill="currentColor" opacity="0.1" />
-    </svg>
-  );
-}
-
 export default function HomePage() {
   const [activeStep, setActiveStep] = useState(0);
   const [hideTopbar, setHideTopbar] = useState(false);
@@ -229,14 +182,6 @@ export default function HomePage() {
 
       <main>
         <section className={cx('hero', 'container')}>
-          {/* Floating decorative illustrations */}
-          <BrowserWindowSvg className={cx('hero-deco', 'hero-deco--tl')} />
-          <BrowserWindowSvg className={cx('hero-deco', 'hero-deco--br')} style={{ transform: 'scale(0.8)' }} />
-          <ListSvg className={cx('hero-deco', 'hero-deco--tr')} />
-          <PlaySvg className={cx('hero-deco', 'hero-deco--bl')} />
-          <CursorSvg className={cx('hero-deco', 'hero-deco--cursor')} style={{ top: '18%', left: '12%' }} />
-          <CursorSvg className={cx('hero-deco', 'hero-deco--cursor')} style={{ bottom: '22%', right: '8%' }} />
-
           <div className={cx('hero-copy')}>
             <p className={cx('kicker')}>UI Navigator for business teams</p>
             <h1>Show the browser once. Let Memoo guide it live.</h1>

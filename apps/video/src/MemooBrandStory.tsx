@@ -64,12 +64,13 @@ export const MEMOO_BRAND_STORY_DURATION =
   sceneDurations.close;
 
 const HOOK_TEXT = 'Memoo is ......';
-const HOOK_TYPE_START = 10;
-const HOOK_CHAR_INTERVAL = 5;
-const HOOK_RESOLVE_FRAME = 96;
+const QUESTION_TEXT = 'What is Memoo?';
+const HOOK_TYPE_START = 38;
+const HOOK_CHAR_INTERVAL = 6;
+const HOOK_RESOLVE_FRAME = 156;
 const HOOK_TYPING_DURATION = HOOK_RESOLVE_FRAME - HOOK_TYPE_START + 8;
-const STRIKE_FRAMES = [118, 138, 158] as const;
-const AVATAR_FRAMES = [150, 164, 178] as const;
+const STRIKE_FRAMES = [194, 232, 270] as const;
+const AVATAR_FRAMES = [220, 248, 276] as const;
 
 const songSrc = staticFile('audio/song.mp3');
 const keyboardTypingSrc = staticFile('sfx/keyboard-typing.mp3');
@@ -151,13 +152,37 @@ const TransitionMask = ({
   accent: string;
   direction: 'left' | 'right' | 'up';
 }) => {
-  const progress = tween(frame, 0, 16, 0, 1);
+  const progress = tween(frame, 0, 22, 0, 1);
   const transform =
     direction === 'left'
-      ? `translateX(${interpolate(progress, [0, 1], [0, -100])}%)`
+      ? `translateX(${interpolate(progress, [0, 1], [0, -102])}%)`
       : direction === 'up'
-        ? `translateY(${interpolate(progress, [0, 1], [0, -100])}%)`
-        : `translateX(${interpolate(progress, [0, 1], [0, 100])}%)`;
+        ? `translateY(${interpolate(progress, [0, 1], [0, -102])}%)`
+        : `translateX(${interpolate(progress, [0, 1], [0, 102])}%)`;
+  const glowStyle =
+    direction === 'up'
+      ? {
+          left: 0,
+          right: 0,
+          bottom: -24,
+          height: 164,
+          background: `linear-gradient(to top, ${accent}40 0%, ${accent}12 36%, transparent 100%)`,
+        }
+      : direction === 'right'
+        ? {
+            top: 0,
+            right: -24,
+            bottom: 0,
+            width: 164,
+            background: `linear-gradient(to left, ${accent}42 0%, ${accent}12 36%, transparent 100%)`,
+          }
+        : {
+            top: 0,
+            left: -24,
+            bottom: 0,
+            width: 164,
+            background: `linear-gradient(to right, ${accent}42 0%, ${accent}12 36%, transparent 100%)`,
+          };
 
   return (
     <div
@@ -172,21 +197,18 @@ const TransitionMask = ({
       <div
         style={{
           position: 'absolute',
-          inset: 0,
+          inset: -18,
           background: memooTheme.backgroundElevated,
+          borderRadius: 56,
+          boxShadow: `0 24px 90px ${accent}14`,
           transform,
         }}
       >
         <div
           style={{
             position: 'absolute',
-            background: accent,
-            opacity: 0.1,
-            ...(direction === 'up'
-              ? {left: 0, right: 0, bottom: 0, height: 86}
-              : direction === 'right'
-                ? {top: 0, right: 0, bottom: 0, width: 86}
-                : {top: 0, left: 0, bottom: 0, width: 86}),
+            filter: 'blur(4px)',
+            ...glowStyle,
           }}
         />
       </div>
@@ -278,13 +300,19 @@ const FlatAvatar = ({
   name,
   role,
   delay,
+  compact = false,
 }: {
   name: string;
   role: string;
   delay: number;
+  compact?: boolean;
 }) => {
   const frame = useCurrentFrame();
   const opacity = tween(frame, delay, 16, 0, 1);
+  const avatarSize = compact ? 78 : 112;
+  const radius = compact ? 38 : 54;
+  const faceRadius = compact ? 13 : 18;
+  const strokeWidth = compact ? 2 : 2.5;
 
   return (
     <div
@@ -295,16 +323,16 @@ const FlatAvatar = ({
         opacity,
       }}
     >
-      <svg width="112" height="112" viewBox="0 0 112 112" fill="none">
-        <circle cx="56" cy="56" r="54" fill="#fff" stroke={memooTheme.lineStrong} strokeWidth="2" />
-        <circle cx="56" cy="44" r="18" fill="none" stroke={memooTheme.text} strokeWidth="2.5" />
-        <path d="M28 86C33 72 43 66 56 66C69 66 79 72 84 86" stroke={memooTheme.text} strokeWidth="2.5" strokeLinecap="round" />
+      <svg width={avatarSize} height={avatarSize} viewBox="0 0 112 112" fill="none">
+        <circle cx="56" cy="56" r={radius} fill="#fff" stroke={memooTheme.lineStrong} strokeWidth="2" />
+        <circle cx="56" cy="44" r={faceRadius} fill="none" stroke={memooTheme.text} strokeWidth={strokeWidth} />
+        <path d="M28 86C33 72 43 66 56 66C69 66 79 72 84 86" stroke={memooTheme.text} strokeWidth={strokeWidth} strokeLinecap="round" />
         <circle cx="48" cy="42" r="2.5" fill={memooTheme.text} />
         <circle cx="64" cy="42" r="2.5" fill={memooTheme.text} />
         <path d="M49 52C52 55 60 55 63 52" stroke={memooTheme.text} strokeWidth="2.2" strokeLinecap="round" />
       </svg>
-      <div style={{fontSize: 18, fontWeight: 900, letterSpacing: '-0.03em'}}>{name}</div>
-      <div style={{fontSize: 15, color: memooTheme.muted}}>{role}</div>
+      {compact ? null : <div style={{fontSize: 18, fontWeight: 900, letterSpacing: '-0.03em'}}>{name}</div>}
+      {compact ? null : <div style={{fontSize: 15, color: memooTheme.muted}}>{role}</div>}
     </div>
   );
 };
@@ -486,17 +514,22 @@ const ClipSlot = ({
 
 const IntroScene = () => {
   const frame = useCurrentFrame();
+  const questionOpacity = Math.min(tween(frame, 0, 16, 0, 1), tween(frame, HOOK_TYPE_START - 10, 14, 1, 0));
+  const questionY = tween(frame, 0, 18, 16, 0);
+  const isTypingStarted = frame >= HOOK_TYPE_START;
   const visibleCharacters = Math.max(
     0,
     Math.min(HOOK_TEXT.length, Math.floor((frame - HOOK_TYPE_START) / HOOK_CHAR_INTERVAL) + 1)
   );
   const typedText = HOOK_TEXT.slice(0, visibleCharacters);
-  const showCursor = visibleCharacters < HOOK_TEXT.length || Math.floor(frame / 10) % 2 === 0;
+  const showCursor = isTypingStarted && (visibleCharacters < HOOK_TEXT.length || Math.floor(frame / 10) % 2 === 0);
   const introSettleX = tween(frame, 0, 16, 14, 0);
-  const exitLeft = tween(frame, HOOK_RESOLVE_FRAME - 8, 18, 0, -1480);
+  const exitLeft = tween(frame, HOOK_RESOLVE_FRAME + 6, 22, 0, -1480);
   const hookTranslateX = frame < HOOK_RESOLVE_FRAME - 8 ? introSettleX : exitLeft;
   const logoOpacity = tween(frame, HOOK_RESOLVE_FRAME - 2, 18, 0, 1);
   const logoY = tween(frame, HOOK_RESOLVE_FRAME - 2, 18, 22, 0);
+  const railOpacity = tween(frame, STRIKE_FRAMES[0] - 18, 18, 0, 1);
+  const railY = tween(frame, STRIKE_FRAMES[0] - 18, 18, 20, 0);
 
   return (
     <Scene frame={frame} duration={sceneDurations.intro} accent={memooTheme.blue} transition="right">
@@ -543,6 +576,22 @@ const IntroScene = () => {
             style={{
               position: 'absolute',
               left: '50%',
+              top: '35%',
+              fontSize: 42,
+              fontWeight: 800,
+              letterSpacing: '-0.05em',
+              color: memooTheme.text,
+              opacity: questionOpacity,
+              transform: `translate(-50%, -50%) translateY(${questionY}px)`,
+            }}
+          >
+            {QUESTION_TEXT}
+          </div>
+
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
               top: '50%',
               color: memooTheme.blue,
               fontSize: 88,
@@ -550,6 +599,7 @@ const IntroScene = () => {
               letterSpacing: '0.04em',
               lineHeight: 0.9,
               whiteSpace: 'nowrap',
+              opacity: isTypingStarted ? 1 : 0,
               transform: `translate(-50%, -50%) translateX(${hookTranslateX}px)`,
             }}
           >
@@ -574,21 +624,25 @@ const IntroScene = () => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1.1fr 0.9fr',
+            gridTemplateColumns: '1.2fr 0.8fr',
             alignItems: 'end',
-            gap: 28,
+            gap: 42,
+            paddingTop: 26,
+            borderTop: `1px solid ${memooTheme.lineSoft}`,
+            opacity: railOpacity,
+            transform: `translateY(${railY}px)`,
           }}
         >
-          <div style={{display: 'grid', gap: 10, alignContent: 'end'}}>
+          <div style={{display: 'grid', gap: 16, alignContent: 'end'}}>
             <StrikeTag text="Macro recorder" from={STRIKE_FRAMES[0]} />
             <StrikeTag text="Just automation" from={STRIKE_FRAMES[1]} />
             <StrikeTag text="Random AI clicking" from={STRIKE_FRAMES[2]} />
           </div>
 
-          <div style={{display: 'flex', justifyContent: 'flex-end', gap: 18}}>
-            <FlatAvatar name="Nora" role="Revenue Ops" delay={AVATAR_FRAMES[0]} />
-            <FlatAvatar name="Sam" role="Support" delay={AVATAR_FRAMES[1]} />
-            <FlatAvatar name="Iris" role="Growth" delay={AVATAR_FRAMES[2]} />
+          <div style={{display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: 12}}>
+            <FlatAvatar name="Nora" role="Revenue Ops" delay={AVATAR_FRAMES[0]} compact />
+            <FlatAvatar name="Sam" role="Support" delay={AVATAR_FRAMES[1]} compact />
+            <FlatAvatar name="Iris" role="Growth" delay={AVATAR_FRAMES[2]} compact />
           </div>
         </div>
       </div>

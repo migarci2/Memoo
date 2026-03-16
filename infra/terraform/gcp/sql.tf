@@ -11,6 +11,7 @@ resource "google_sql_database_instance" "main" {
   deletion_protection = var.db_deletion_protection
 
   settings {
+    edition           = var.db_edition
     tier              = var.db_tier
     availability_type = "ZONAL"
     disk_type         = var.db_disk_type

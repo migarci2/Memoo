@@ -34,9 +34,15 @@ variable "enable_budget" {
 }
 
 variable "monthly_budget_amount_usd" {
-  description = "Monthly budget amount in USD for cost alerts."
+  description = "Monthly budget amount for cost alerts, expressed in the billing account currency."
   type        = number
   default     = 80
+}
+
+variable "billing_budget_currency_code" {
+  description = "Currency code used by the billing account for budget alerts."
+  type        = string
+  default     = "USD"
 }
 
 variable "labels" {
@@ -52,6 +58,11 @@ variable "api_image" {
 
 variable "web_image" {
   description = "Full Artifact Registry image reference for the web service."
+  type        = string
+}
+
+variable "agent_image" {
+  description = "Full Artifact Registry image reference for the Stagehand agent service."
   type        = string
 }
 
@@ -82,6 +93,12 @@ variable "db_tier" {
   description = "Cloud SQL machine tier."
   type        = string
   default     = "db-g1-small"
+}
+
+variable "db_edition" {
+  description = "Cloud SQL edition."
+  type        = string
+  default     = "ENTERPRISE"
 }
 
 variable "db_disk_size_gb" {
@@ -132,6 +149,12 @@ variable "gemini_model" {
   description = "Backend Gemini model."
   type        = string
   default     = "gemini-2.5-flash"
+}
+
+variable "stagehand_model" {
+  description = "Optional dedicated Stagehand model. Defaults to gemini_model when empty."
+  type        = string
+  default     = ""
 }
 
 variable "next_public_gemini_live_model" {
@@ -226,6 +249,24 @@ variable "web_memory" {
 
 variable "web_max_instances" {
   description = "Maximum instance count for the web Cloud Run service."
+  type        = number
+  default     = 2
+}
+
+variable "agent_cpu" {
+  description = "CPU allocation for the agent Cloud Run service."
+  type        = string
+  default     = "1"
+}
+
+variable "agent_memory" {
+  description = "Memory allocation for the agent Cloud Run service."
+  type        = string
+  default     = "1Gi"
+}
+
+variable "agent_max_instances" {
+  description = "Maximum instance count for the agent Cloud Run service."
   type        = number
   default     = 2
 }

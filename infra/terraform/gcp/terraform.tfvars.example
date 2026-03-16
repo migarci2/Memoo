@@ -1,15 +1,18 @@
 project_id = "my-gcp-project"
 region     = "europe-west1"
 zone       = "europe-west1-b"
-billing_account_id = "000000-000000-000000"
-enable_budget      = true
-monthly_budget_amount_usd = 80
+billing_account_id          = "000000-000000-000000"
+enable_budget               = true
+monthly_budget_amount_usd   = 80
+billing_budget_currency_code = "USD"
 
 api_image     = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-api:latest"
 web_image     = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-web:latest"
+agent_image   = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-agent:latest"
 sandbox_image = "europe-west1-docker.pkg.dev/my-gcp-project/memoo-containers/memoo-sandbox:latest"
 
 db_version      = "POSTGRES_16"
+db_edition      = "ENTERPRISE"
 db_tier         = "db-g1-small"
 db_disk_type    = "PD_HDD"
 db_disk_size_gb = 10
@@ -36,4 +39,5 @@ google_api_key             = "replace-me"
 next_public_gemini_api_key = ""
 
 gemini_model                  = "gemini-2.5-flash"
+stagehand_model               = ""
 next_public_gemini_live_model = "gemini-2.5-flash-native-audio-preview-12-2025"

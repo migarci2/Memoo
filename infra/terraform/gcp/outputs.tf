@@ -13,6 +13,11 @@ output "api_service_url" {
   value       = google_cloud_run_v2_service.api.uri
 }
 
+output "agent_service_url" {
+  description = "Public Cloud Run URL for the Stagehand agent service."
+  value       = google_cloud_run_v2_service.agent.uri
+}
+
 output "api_public_base_url" {
   description = "Base URL for the API including the /api prefix."
   value       = "${google_cloud_run_v2_service.api.uri}/api"

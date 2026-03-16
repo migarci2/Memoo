@@ -8,108 +8,106 @@ Render with:
 from diagrams import Cluster, Diagram, Edge
 from diagrams.gcp.compute import CloudRun, ComputeEngine
 from diagrams.gcp.database import SQL
-from diagrams.gcp.devtools import ContainerRegistry
-from diagrams.gcp.network import CDN, VirtualPrivateCloud
-from diagrams.gcp.operations import Logging, Monitoring
-from diagrams.gcp.security import Iam, SecretManager
-from diagrams.gcp.storage import GCS
 from diagrams.gcp.ml import VertexAI
+from diagrams.gcp.network import CDN, LoadBalancing
+from diagrams.gcp.security import SecretManager
+from diagrams.gcp.storage import GCS
 from diagrams.onprem.client import Users
 
 
 GRAPH_ATTR = {
-    "bgcolor": "white",
-    "pad": "1.5",
-    "nodesep": "1.5",
-    "ranksep": "2.0",
-    "splines": "curved",
+    "bgcolor": "#fcfcfd",
+    "pad": "1.0",
+    "nodesep": "1.0",
+    "ranksep": "1.25",
+    "splines": "ortho",
     "fontname": "Helvetica",
-    "fontsize": "18",
+    "fontsize": "20",
     "labelloc": "t",
+    "labeljust": "l",
+    "compound": "true",
 }
 
 NODE_ATTR = {
     "fontname": "Helvetica",
     "fontsize": "11",
+    "margin": "0.18,0.12",
 }
 
 EDGE_ATTR = {
     "fontname": "Helvetica",
-    "fontsize": "9",
+    "fontsize": "10",
+    "penwidth": "1.8",
 }
+
+CLUSTER_PUBLIC = {
+    "style": "rounded,filled",
+    "bgcolor": "#eef6ff",
+    "pencolor": "#bfd8f4",
+    "fontname": "Helvetica",
+    "fontsize": "13",
+    "labeljust": "l",
+}
+
+CLUSTER_PRIVATE = {
+    "style": "rounded,filled",
+    "bgcolor": "#f7f8fa",
+    "pencolor": "#d9dee7",
+    "fontname": "Helvetica",
+    "fontsize": "13",
+    "labeljust": "l",
+}
+
+PUBLIC_EDGE = {"color": "#2b6cb0"}
+APP_EDGE = {"color": "#1f5c84"}
+PRIVATE_EDGE = {"color": "#1b8b82"}
+DATA_EDGE = {"color": "#c96f23"}
+
 
 with Diagram(
     "Memoo - Google Cloud Architecture",
     filename="memoo_gcp_architecture",
     outformat=["png", "svg"],
     show=False,
-    direction="TB",
+    direction="LR",
     graph_attr=GRAPH_ATTR,
     node_attr=NODE_ATTR,
     edge_attr=EDGE_ATTR,
 ):
-    # External Entry
-    users = Users("End Users")
-    cdn = CDN("Cloud CDN\nHTTPS")
-    
-    users >> Edge(color="#1f77b4", penwidth="2.5") >> cdn
+    users = Users("Operators\nand teammates")
 
-    with Cluster("Google Cloud Platform", graph_attr={"style": "filled", "bgcolor": "#f0f8ff", "fontsize": "14"}):
-        
-        # Frontend
-        frontend = CloudRun("Frontend\nCloud Run\n(Next.js)")
-        cdn >> Edge(color="#1f77b4", penwidth="2.5") >> frontend
+    with Cluster("Public entry", graph_attr=CLUSTER_PUBLIC):
+        edge = CDN("HTTPS edge\nstatic + cached assets")
+        lb = LoadBalancing("Public routing\nweb + sandbox access")
 
-        # Backend
-        backend = CloudRun("Backend\nCloud Run\n(FastAPI)")
-        frontend >> Edge(color="#1f77b4", penwidth="2.0") >> backend
+    with Cluster("Google Cloud project", graph_attr=CLUSTER_PRIVATE):
+        with Cluster("Application services", graph_attr=CLUSTER_PRIVATE):
+            web = CloudRun("apps/web\nCloud Run\nNext.js UI")
+            api = CloudRun("apps/api\nCloud Run\nFastAPI orchestration")
+            agent = CloudRun("apps/agent\nCloud Run\nStagehand fallback")
 
-        # Sandbox
-        sandbox = ComputeEngine("Sandbox VM\nCompute Engine\n(Playwright)")
+        with Cluster("Execution plane", graph_attr=CLUSTER_PUBLIC):
+            sandbox = ComputeEngine("Sandbox VM\nLive browser view\nChromium + CDP + noVNC")
 
-        # AI Service
-        ai = VertexAI("AI Engine\nVertex AI\n(Gemini)")
+        with Cluster("Data and AI", graph_attr=CLUSTER_PRIVATE):
+            db = SQL("Cloud SQL\nPostgreSQL")
+            storage = GCS("Cloud Storage\nEvidence bucket")
+            secrets = SecretManager("Secret Manager")
+            gemini = VertexAI("Gemini API\nvision + compile + agent")
 
-        # Databases & Storage
-        db = SQL("Database\nCloud SQL")
-        storage = GCS("Storage\nCloud Storage")
-        secrets = SecretManager("Secrets\nSecret Manager")
+    users >> Edge(label="HTTPS", **PUBLIC_EDGE) >> edge >> Edge(**PUBLIC_EDGE) >> lb
 
-        # Operations
-        registry = ContainerRegistry("Registry\nArtifact Registry")
-        iam = Iam("IAM\nService Accounts")
-        logging = Logging("Logging\nCloud Logging")
-        monitoring = Monitoring("Monitoring\nCloud Monitoring")
+    lb >> Edge(label="product UI", **APP_EDGE) >> web
+    lb >> Edge(**PUBLIC_EDGE) >> sandbox
 
-        # VPC Network (background concept)
-        vpc = VirtualPrivateCloud("VPC Network")
+    web >> Edge(label="/api/proxy", **APP_EDGE) >> api
+    api >> Edge(label="playbook CRUD\ncapture, runs, automations", **DATA_EDGE) >> db
+    api >> Edge(label="screenshots + evidence", **DATA_EDGE) >> storage
+    api >> Edge(label="runtime config + API keys", **PRIVATE_EDGE) >> secrets
 
-        # Main Backend Connections
-        backend >> Edge(color="#2ca02c", penwidth="2.0") >> sandbox
-        backend >> Edge(color="#ff6600", penwidth="2.0") >> ai
-        ai >> Edge(color="#ff6600", penwidth="2.0") >> backend
+    api >> Edge(label="frame analysis\ncompile steps", **PRIVATE_EDGE) >> gemini
+    agent >> Edge(label="autonomous reasoning", **PRIVATE_EDGE) >> gemini
 
-        # Data Access Layer
-        backend >> Edge(color="#d62728", penwidth="1.8") >> db
-        backend >> Edge(color="#d62728", penwidth="1.8") >> storage
-        backend >> Edge(color="#9467bd", penwidth="1.5") >> secrets
-
-        # Deployment & Security
-        registry >> Edge(color="#bcbd22", style="dashed", penwidth="1.2") >> frontend
-        registry >> Edge(color="#bcbd22", style="dashed", penwidth="1.2") >> backend
-        registry >> Edge(color="#bcbd22", style="dashed", penwidth="1.2") >> sandbox
-
-        iam >> Edge(color="#7f7f7f", style="dashed", penwidth="1.2") >> frontend
-        iam >> Edge(color="#7f7f7f", style="dashed", penwidth="1.2") >> backend
-        iam >> Edge(color="#7f7f7f", style="dashed", penwidth="1.2") >> sandbox
-
-        # Observability
-        frontend >> Edge(color="#17becf", penwidth="1.2") >> logging
-        backend >> Edge(color="#17becf", penwidth="1.2") >> logging
-        sandbox >> Edge(color="#17becf", penwidth="1.2") >> logging
-        logging >> Edge(color="#17becf", penwidth="1.2") >> monitoring
-
-        # VPC connections (invisible backbone)
-        vpc >> Edge(style="invis") >> db
-        vpc >> Edge(style="invis") >> storage
-        vpc >> Edge(style="invis") >> secrets
+    api >> Edge(label="selector path\nor sandbox mode", **PRIVATE_EDGE) >> sandbox
+    api >> Edge(label="fallback request", **APP_EDGE) >> agent
+    agent >> Edge(label="shared browser via CDP", **PRIVATE_EDGE) >> sandbox

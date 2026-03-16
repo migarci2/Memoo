@@ -41,14 +41,21 @@ docker build \
   "${ROOT_DIR}/apps/web"
 
 docker build \
+  -f "${ROOT_DIR}/apps/agent/Dockerfile" \
+  -t "${BASE_IMAGE_PATH}/memoo-agent:${TAG}" \
+  "${ROOT_DIR}/apps/agent"
+
+docker build \
   -f "${ROOT_DIR}/apps/sandbox/Dockerfile" \
   -t "${BASE_IMAGE_PATH}/memoo-sandbox:${TAG}" \
   "${ROOT_DIR}/apps/sandbox"
 
 docker push "${BASE_IMAGE_PATH}/memoo-api:${TAG}"
 docker push "${BASE_IMAGE_PATH}/memoo-web:${TAG}"
+docker push "${BASE_IMAGE_PATH}/memoo-agent:${TAG}"
 docker push "${BASE_IMAGE_PATH}/memoo-sandbox:${TAG}"
 
 printf 'API_IMAGE=%s\n' "${BASE_IMAGE_PATH}/memoo-api:${TAG}"
 printf 'WEB_IMAGE=%s\n' "${BASE_IMAGE_PATH}/memoo-web:${TAG}"
+printf 'AGENT_IMAGE=%s\n' "${BASE_IMAGE_PATH}/memoo-agent:${TAG}"
 printf 'SANDBOX_IMAGE=%s\n' "${BASE_IMAGE_PATH}/memoo-sandbox:${TAG}"
