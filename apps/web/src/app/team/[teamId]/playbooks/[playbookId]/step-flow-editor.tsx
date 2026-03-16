@@ -48,11 +48,11 @@ const GAP_X = 44;
 /* ══ Step type metadata ═════════════════════════════════════════════════════ */
 
 const STEP_TYPES = [
-  'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'condition', 'loop',
+  'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'scroll', 'condition', 'loop',
 ] as const;
 type StepType = (typeof STEP_TYPES)[number];
 
-const ACTION_TYPES: StepType[] = ['navigate', 'click', 'input', 'submit', 'verify', 'wait'];
+const ACTION_TYPES: StepType[] = ['navigate', 'click', 'input', 'submit', 'verify', 'wait', 'scroll'];
 const FLOW_TYPES: StepType[] = ['condition', 'loop'];
 
 type IconProps = { size?: number; weight?: 'bold' | 'regular' | 'fill'; className?: string };
@@ -71,6 +71,7 @@ const META: Record<StepType, StepMeta> = {
   submit:   { icon: PaperPlaneTilt,  color: 'text-blue-600', bg: 'bg-blue-50',     hex: '#3b82f6', label: 'Submit'    },
   verify:   { icon: Eye,            color: 'text-violet-600', bg: 'bg-violet-50',   hex: '#8b5cf6', label: 'Verify'    },
   wait:     { icon: Timer,          color: 'text-slate-500', bg: 'bg-gray-50',     hex: '#6b7280', label: 'Wait'      },
+  scroll:   { icon: ArrowDown,      color: 'text-sky-600', bg: 'bg-sky-50',       hex: '#0ea5e9', label: 'Scroll'    },
   condition:{ icon: Diamond,        color: 'text-orange-600', bg: 'bg-orange-50',   hex: '#f97316', label: 'Condition' },
   loop:     { icon: ArrowsClockwise,color: 'text-cyan-600', bg: 'bg-cyan-50',     hex: '#06b6d4', label: 'Loop'      },
 };
@@ -98,12 +99,16 @@ function uid(): string {
 }
 
 function blankStep(type: StepType = 'click'): EditableStep {
-  return {
+  const base: EditableStep = {
     _key: uid(), title: '', step_type: type, target_url: '', selector: '',
     variables: {}, guardrails: {},
     condition_expr: '', then_branch: [], else_branch: [],
     loop_expr: '', loop_max: '3', loop_body: [],
   };
+  if (type === 'scroll') {
+    base.variables = { direction: 'down', amount: '720' };
+  }
+  return base;
 }
 
 function fromApi(step: PlaybookStep): EditableStep {
@@ -148,7 +153,7 @@ function toApi(step: EditableStep): PlaybookStepCreate {
   }
   return {
     title: step.title.trim(), step_type: step.step_type,
-    target_url: step.target_url || undefined, selector: step.selector || undefined,
+    target_url: step.target_url.trim() || undefined, selector: step.selector.trim() || undefined,
     variables: vars,
     guardrails: Object.keys(guards).length ? guards : {},
   };
@@ -690,6 +695,48 @@ function EditSidebar({ node, updateStep, removeStep, moveStep, addToBranch, clos
         )}
         {isAction && ['click', 'input', 'verify'].includes(node.step_type) && (
           <SideField label="CSS Selector"><input className="input font-mono text-xs" value={node.selector} onChange={e => updateStep(node._key, { selector: e.target.value })} /></SideField>
+        )}
+        {node.step_type === 'navigate' && (
+          <SideField label="Target URL">
+            <input
+              className="input font-mono text-xs"
+              value={node.target_url}
+              onChange={e => updateStep(node._key, { target_url: e.target.value })}
+              placeholder="https://example.com"
+            />
+          </SideField>
+        )}
+        {node.step_type === 'scroll' && (
+          <div className="space-y-4">
+            <SideField label="Direction">
+              <select
+                className="input text-sm"
+                value={node.variables.direction || 'down'}
+                onChange={e => updateStep(node._key, { variables: { ...node.variables, direction: e.target.value } })}
+              >
+                <option value="down">Down</option>
+                <option value="up">Up</option>
+                <option value="bottom">To bottom</option>
+                <option value="top">To top</option>
+              </select>
+            </SideField>
+            <SideField label="Pixels">
+              <input
+                className="input font-mono text-xs"
+                value={node.variables.amount || '720'}
+                onChange={e => updateStep(node._key, { variables: { ...node.variables, amount: e.target.value } })}
+                placeholder="720"
+              />
+            </SideField>
+            <SideField label="Target selector (optional)">
+              <input
+                className="input font-mono text-xs"
+                value={node.selector}
+                onChange={e => updateStep(node._key, { selector: e.target.value })}
+                placeholder="#submit-button"
+              />
+            </SideField>
+          </div>
         )}
         {node.step_type === 'input' && (
           <SideField label="Value"><input className="input font-mono text-xs" value={node.variables.value || ''} onChange={e => updateStep(node._key, { variables: { ...node.variables, value: e.target.value } })} /></SideField>

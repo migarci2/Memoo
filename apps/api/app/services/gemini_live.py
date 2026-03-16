@@ -16,7 +16,7 @@ import logging
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
-ALLOWED_CAPTURE_EVENT_KINDS = {'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'action'}
+ALLOWED_CAPTURE_EVENT_KINDS = {'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'scroll', 'action'}
 
 # ── Prompt ───────────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ If a new action is clearly visible, respond with:
   "frame_summary": "<one sentence describing the current UI state>",
   "events": [
     {{
-      "kind": "<navigate|click|input|submit|verify|wait>",
+      "kind": "<navigate|click|input|submit|verify|wait|scroll>",
       "url": "<URL visible in the address bar, if any>",
       "selector": "<human-readable description of the UI element, e.g. 'Login button', '#email-input'>",
       "value": "<value being typed or selected, if applicable>",
