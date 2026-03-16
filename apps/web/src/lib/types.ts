@@ -121,6 +121,11 @@ export type CaptureEventInput = {
   value?: string;
   text?: string;
   timestamp?: string;
+  confidence?: number | null;
+  evidence?: string[];
+  observed_text?: string | null;
+  frame_summary?: string | null;
+  source?: string | null;
 };
 
 export type CompileResult = {
@@ -137,11 +142,18 @@ export type FrameAnalysisEvent = {
   selector?: string | null;
   value?: string | null;
   text?: string | null;
+  timestamp?: string | null;
+  confidence?: number | null;
+  evidence?: string[];
+  observed_text?: string | null;
+  frame_summary?: string | null;
+  source?: string | null;
 };
 
 export type FrameAnalysisResult = {
   detected: boolean;
   events: FrameAnalysisEvent[];
+  frame_summary?: string | null;
 };
 
 // ── Gemini Live (voice co-pilot) ──────────────────────────────────────────
@@ -250,12 +262,22 @@ export type RunEvent = {
   created_at: string;
 };
 
+export type RunPlaybookStep = {
+  sequence: number;
+  title: string;
+  step_type: string;
+  target_url?: string | null;
+  selector?: string | null;
+  variables?: Record<string, unknown>;
+  guardrails?: Record<string, unknown>;
+};
+
 export type RunDetail = {
   run: Run;
   items: RunItem[];
   events_by_item: Record<string, RunEvent[]>;
   playbook_name: string;
-  playbook_steps?: any[];
+  playbook_steps?: RunPlaybookStep[];
 };
 
 // ── Vault ────────────────────────────────────────────────────────────────

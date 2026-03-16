@@ -13,6 +13,7 @@ import {
   WaveTriangle,
 } from '@phosphor-icons/react';
 
+import { GeminiLivePanel } from '@/components/gemini-live-panel';
 import { PlatformShell } from '@/components/platform-shell';
 import { useToast } from '@/components/toast-provider';
 import { useGeminiLive } from '@/hooks/use-gemini-live';
@@ -24,34 +25,30 @@ import type {
   FrameAnalysisResult,
 } from '@/lib/types';
 
-/* ── constants ────────────────────────────────────────────────────────────── */
-
-const FRAME_INTERVAL_MS = 4_000; // capture a frame every 4 seconds
+const FRAME_INTERVAL_MS = 4_000;
 
 const KIND_COLORS: Record<string, string> = {
-  navigate: 'bg-[var(--app-chip)] text-[var(--app-blue)]',
-  click: 'bg-[rgba(123,155,134,0.18)] text-[#335443]',
-  input: 'bg-[rgba(191,155,106,0.16)] text-[#7d5d31]',
-  submit: 'bg-[rgba(95,119,132,0.18)] text-[#3f5e6f]',
-  verify: 'bg-[rgba(123,155,134,0.25)] text-[#335443]',
-  wait: 'bg-[var(--app-chip)] text-[var(--app-muted)]',
-  action: 'bg-[rgba(95,119,132,0.12)] text-[#3f5e6f]',
+  navigate: 'bg-slate-50 text-slate-700 border-slate-100',
+  click: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  input: 'bg-amber-50 text-amber-700 border-amber-100',
+  submit: 'bg-blue-50 text-blue-700 border-blue-100',
+  verify: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  wait: 'bg-gray-50 text-gray-600 border-gray-100',
+  action: 'bg-slate-50 text-slate-700 border-slate-100',
+  voice_note: 'bg-[rgba(15,103,143,0.08)] text-[var(--app-blue)] border-[rgba(15,103,143,0.12)]',
+  gemini_clarification: 'bg-[rgba(217,138,63,0.1)] text-[var(--app-brand-sand)] border-[rgba(217,138,63,0.14)]',
 };
-
-/* ── component ────────────────────────────────────────────────────────────── */
 
 export default function CapturePage() {
   const { teamId } = useParams<{ teamId: string }>();
   const router = useRouter();
   const { toast } = useToast();
 
-  /* capture session */
   const [session, setSession] = useState<CaptureSession | null>(null);
   const [title, setTitle] = useState('');
   const [starting, setStarting] = useState(false);
   const [compiling, setCompiling] = useState(false);
 
-  /* screen capture — refs persist across renders */
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -61,34 +58,44 @@ export default function CapturePage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [frameCount, setFrameCount] = useState(0);
   const [streamReady, setStreamReady] = useState(false);
+  const [frameSummary, setFrameSummary] = useState('');
+  const [lastGroundedEvent, setLastGroundedEvent] = useState<CaptureEventInput | null>(null);
 
-  /* detected events */
   const [events, setEvents] = useState<CaptureEventInput[]>([]);
-
-  /* past captures */
   const [captures, setCaptures] = useState<CaptureSession[]>([]);
 
-  /* live voice session */
   const [liveActive, setLiveActive] = useState(false);
-  const live = useGeminiLive({
-    onError: (msg) => {
-      toast(msg, 'error');
+  const liveActiveRef = useRef(false);
+  useEffect(() => { liveActiveRef.current = liveActive; }, [liveActive]);
+
+  const { start: liveStart, stop: liveStop, sendContextUpdate: liveSend, status: liveStatus, transcript, isMuted, mute, unmute } = useGeminiLive({
+    onError: (msg) => toast(msg, 'error'),
+    onVoiceNote: (text, role) => {
+      const captureId = captureIdRef.current;
+      if (!captureId || !text.trim()) {
+        return;
+      }
+
+      const note: CaptureEventInput = {
+        kind: role === 'user' ? 'voice_note' : 'gemini_clarification',
+        text,
+        timestamp: new Date().toISOString(),
+        source: role === 'user' ? 'navigator_user_voice' : 'navigator_gemini_voice',
+      };
+
+      setEvents(prev => [...prev, note]);
+      void apiPost<CaptureSession>(`/captures/${captureId}/events`, [note]).catch(err => {
+        console.error('[capture] failed to persist voice note', err);
+      });
     },
   });
-  // Stable refs so callbacks don't change on every render
-  const liveActiveRef = useRef(false);
-  const liveStopRef   = useRef<() => void>(live.stop);
-  const liveSendRef   = useRef<(t: string) => void>(live.sendContextUpdate);
-  useEffect(() => { liveActiveRef.current = liveActive; }, [liveActive]);
-  useEffect(() => { liveStopRef.current   = live.stop; }, [live.stop]);
-  useEffect(() => { liveSendRef.current   = live.sendContextUpdate; }, [live.sendContextUpdate]);
+
   useEffect(() => {
     if (!liveActive) return;
-    if (live.status === 'idle' || live.status === 'error') {
+    if (liveStatus === 'idle' || liveStatus === 'error') {
       setLiveActive(false);
-      liveActiveRef.current = false;
     }
-  }, [liveActive, live.status]);
+  }, [liveActive, liveStatus]);
 
   useEffect(() => {
     apiGet<CaptureSession[]>(`/teams/${teamId}/captures`)
@@ -96,100 +103,60 @@ export default function CapturePage() {
       .catch(() => {});
   }, [teamId]);
 
-  /* ── start recording ───────────────────────────────────────────────────── */
-
   const startCapture = async () => {
     if (!title.trim()) {
       toast('Give your capture a title', 'error');
       return;
     }
-
     setStarting(true);
     try {
-      // 1. Request screen sharing
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: { ideal: 5 } },
         audio: false,
       });
-
-      stream.getVideoTracks()[0].addEventListener('ended', () => {
-        stopScreenShare();
-      });
-
+      stream.getVideoTracks()[0].addEventListener('ended', () => stopScreenShare());
       streamRef.current = stream;
-
-      // 2. Create capture session on backend
-      const cap = await apiPost<CaptureSession>(`/teams/${teamId}/captures`, {
-        title: title.trim(),
-      });
+      const cap = await apiPost<CaptureSession>(`/teams/${teamId}/captures`, { title: title.trim() });
       captureIdRef.current = cap.id;
+      setEvents([]);
+      setFrameCount(0);
+      setFrameSummary('');
+      setLastGroundedEvent(null);
       setSession(cap);
-
-      // 3. Signal that the stream is ready — a useEffect will
-      //    wire it to the video element after React renders it.
       setStreamReady(true);
-
-      toast('Screen recording started — Gemini is watching', 'success');
-
-    } catch (err) {
+      toast('Screen recording started', 'success');
+    } catch {
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
       setStreamReady(false);
-      if (err instanceof Error && err.name === 'NotAllowedError') {
-        toast('Screen share permission denied', 'error');
-      } else {
-        toast('Failed to start capture', 'error');
-        console.error('[capture] startCapture error:', err);
-      }
+      toast('Failed to start capture', 'error');
     } finally {
       setStarting(false);
     }
   };
 
-  /* ── capture a frame & send to Gemini ──────────────────────────────────── */
-
   const captureAndAnalyze = useCallback(async () => {
     const captureId = captureIdRef.current;
     if (!captureId || busyRef.current) return;
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas) {
-      console.warn('[capture] video or canvas ref missing');
-      return;
-    }
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      console.warn('[capture] video has no dimensions yet');
-      return;
-    }
+    if (!video || !canvas || video.videoWidth === 0) return;
 
     busyRef.current = true;
     setAnalyzing(true);
-
     try {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.drawImage(video, 0, 0);
-
       const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
       const base64 = dataUrl.split(',')[1];
-      if (!base64) {
-        console.warn('[capture] canvas produced empty base64');
-        return;
-      }
+      if (!base64) return;
 
       setFrameCount(prev => prev + 1);
-      console.log(`[capture] sending frame to Gemini (capture=${captureId})`);
-
-      const result = await apiPost<FrameAnalysisResult>(
-        `/captures/${captureId}/analyze-frame`,
-        { image: base64, mime_type: 'image/jpeg' },
-      );
-
-      console.log('[capture] Gemini result:', result);
-
+      const result = await apiPost<FrameAnalysisResult>(`/captures/${captureId}/analyze-frame`, { image: base64, mime_type: 'image/jpeg' });
+      setFrameSummary(result.frame_summary ?? '');
       if (result.detected && result.events.length > 0) {
         const newEvents = result.events.map(e => ({
           kind: e.kind,
@@ -197,433 +164,426 @@ export default function CapturePage() {
           selector: e.selector ?? undefined,
           value: e.value ?? undefined,
           text: e.text ?? undefined,
+          timestamp: e.timestamp ?? new Date().toISOString(),
+          confidence: e.confidence ?? undefined,
+          evidence: e.evidence ?? [],
+          observed_text: e.observed_text ?? undefined,
+          frame_summary: result.frame_summary ?? undefined,
+          source: e.source ?? undefined,
         }));
         setEvents(prev => [...prev, ...newEvents]);
-
-        // Notify Gemini Live session of the newly detected steps
+        setLastGroundedEvent(newEvents[newEvents.length - 1] ?? null);
         if (liveActiveRef.current) {
           for (const ev of newEvents) {
-            const label = ev.text ?? `${ev.kind}${ev.url ? ` on ${ev.url}` : ''}`;
-            liveSendRef.current(label);
+            liveSend(ev.text ?? `${ev.kind}${ev.url ? ` on ${ev.url}` : ''}`);
           }
         }
       }
     } catch (err) {
-      console.error('[capture] frame analysis failed:', err);
+      console.error('[capture] analysis failed', err);
     } finally {
       busyRef.current = false;
       setAnalyzing(false);
     }
-  }, []);
-
-  /* ── wire stream → video once both are in the DOM ──────────────────────── */
+  }, [liveSend]);
 
   useEffect(() => {
     const video = videoRef.current;
     const stream = streamRef.current;
     if (!video || !stream || !streamReady) return;
-
     video.srcObject = stream;
     video.play().then(() => {
-      console.log('[capture] video playing — starting frame timer');
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(captureAndAnalyze, FRAME_INTERVAL_MS);
-    }).catch(err => console.error('[capture] video.play() failed:', err));
+    }).catch(() => {});
   }, [streamReady, captureAndAnalyze]);
 
-  /* ── stop recording ────────────────────────────────────────────────────── */
-
   const stopScreenShare = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop()); streamRef.current = null; }
+    if (videoRef.current) videoRef.current.srcObject = null;
     captureIdRef.current = null;
     setStreamReady(false);
-    // Stop the live voice session if active (via stable ref — no render deps)
-    if (liveActiveRef.current) {
-      liveStopRef.current();
-      setLiveActive(false);
-      liveActiveRef.current = false;
-    }
-  }, []); // empty deps — uses only refs, never stale
-
-  /* ── finalize & compile ────────────────────────────────────────────────── */
-
-  const isTransientFetchError = (err: unknown): boolean => {
-    if (!(err instanceof Error)) return false;
-    const msg = err.message.toLowerCase();
-    return (
-      err.name === 'TypeError'
-      || msg.includes('networkerror')
-      || msg.includes('failed to fetch')
-      || msg.includes('network request failed')
-    );
-  };
-
-  const shouldFallbackToDirectCompile = (err: unknown): boolean => {
-    if (!(err instanceof Error)) return false;
-    const msg = err.message.toLowerCase();
-    return (
-      msg.includes('internal server error')
-      || msg.includes('missing capture id')
-      || msg.includes('upstream compile request failed')
-      || msg.includes('unexpected token')
-    );
-  };
-
-  const compileViaServerRoute = async (captureId: string): Promise<CompileResult> => {
-    const res = await fetch(`/api/captures/${captureId}/compile`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    });
-
-    if (!res.ok) {
-      const raw = await res.text();
-      let message = raw;
-      try {
-        const parsed = JSON.parse(raw) as { detail?: string };
-        if (parsed.detail) message = parsed.detail;
-      } catch {
-        // keep raw text
-      }
-      throw new Error(message || `Compile failed (${res.status})`);
-    }
-
-    return res.json() as Promise<CompileResult>;
-  };
-
-  const compileOnce = async (captureId: string): Promise<CompileResult> => {
-    try {
-      return await compileViaServerRoute(captureId);
-    } catch (err) {
-      if (!shouldFallbackToDirectCompile(err)) throw err;
-      return apiPost<CompileResult>(`/captures/${captureId}/compile`, {});
-    }
-  };
-
-  const compileWithRetry = async (captureId: string): Promise<CompileResult> => {
-    let lastErr: unknown;
-    const delaysMs = [0, 450, 1200];
-
-    for (let attempt = 0; attempt < delaysMs.length; attempt++) {
-      if (delaysMs[attempt] > 0) {
-        await new Promise((r) => setTimeout(r, delaysMs[attempt]));
-      }
-      try {
-        return await compileOnce(captureId);
-      } catch (err) {
-        lastErr = err;
-        if (!isTransientFetchError(err) || attempt === delaysMs.length - 1) {
-          throw err;
-        }
-      }
-    }
-
-    throw lastErr instanceof Error ? lastErr : new Error('Compile failed');
-  };
+    if (liveActiveRef.current) { liveStop(); setLiveActive(false); }
+  }, [liveStop]);
 
   const finalizeAndCompile = async () => {
     if (!session) return;
-    const captureId = session.id;
-
     stopScreenShare();
     setCompiling(true);
-
     try {
-      // Compile endpoint marks the capture as compiled; no separate finalize request needed.
-      const result = await compileWithRetry(captureId);
-
-      toast(`Compiled ${result.steps_count} steps with Gemini`, 'success');
+      const result = await apiPost<CompileResult>(`/captures/${session.id}/compile`, {});
+      toast(`Compiled ${result.steps_count} steps`, 'success');
       router.push(`/team/${teamId}/playbooks/${result.playbook_id}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Compile failed';
-      toast(`Stop & compile failed: ${msg}`, 'error');
+    } catch {
+      toast('Compile failed', 'error');
     } finally {
       setCompiling(false);
     }
   };
 
-  /* ── cleanup on unmount ────────────────────────────────────────────────── */
+  useEffect(() => { return () => stopScreenShare(); }, [stopScreenShare]);
 
-  useEffect(() => {
-    return () => {
-      stopScreenShare();
-    };
-  }, [stopScreenShare]);
-
-  /* ── manual event removal ──────────────────────────────────────────────── */
-
-  const removeEvent = (idx: number) => {
-    setEvents(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const isRecording = session !== null;
-
-  /* ── start / stop Gemini Live session ─────────────────────────────────── */
-
-  const startLiveSession = useCallback(async () => {
+  const startLiveSession = async () => {
     try {
-      await live.start();  // throws if connection fails — shows toast via onError
-      setLiveActive(true); // only runs if truly connected (setupComplete received)
-      toast('Gemini Live session active — speak to add context', 'success');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      // onError already showed a toast with the technical reason;
-      // show a user-friendly fallback only if nothing else showed
-      console.error('[startLiveSession]', msg);
+      await liveStart();
+      setLiveActive(true);
+      toast('Live session active', 'success');
+    } catch {
       setLiveActive(false);
     }
-  }, [live, toast]);
+  };
 
-  const stopLiveSession = useCallback(() => {
-    live.stop();
-    setLiveActive(false);
-    liveActiveRef.current = false;
-  }, [live]);
-
-  /* ── render ────────────────────────────────────────────────────────────── */
+  const groundedEvents = events.filter(
+    event => event.kind !== 'voice_note' && event.kind !== 'gemini_clarification',
+  );
+  const latestTimelineEvent = events[events.length - 1] ?? null;
 
   return (
-    <PlatformShell teamId={teamId}>
-      {/* Off-screen canvas for frame capture (not display:none — needs to render pixels) */}
-      <canvas ref={canvasRef} style={{ position: 'absolute', left: -9999, top: -9999, pointerEvents: 'none' }} />
+    <PlatformShell 
+      teamId={teamId}
+      title="Teach Mode"
+      subtitle="Memoo sees the browser, hears voice context, and compiles grounded playbooks from what actually happened on screen."
+    >
+      <canvas ref={canvasRef} style={{ position: 'absolute', left: -9999, top: -9999 }} />
 
-      <div className="mb-6">
-        <p className="landing-kicker">Teach mode</p>
-        <h1 className="mt-1 text-4xl font-extrabold tracking-tight">Capture a workflow</h1>
-        <p className="mt-2 max-w-[70ch] text-[var(--app-muted)]">
-          Share your screen and perform the workflow. Gemini will watch in real-time
-          and detect every interaction — then compile it into a reusable playbook.
-        </p>
-      </div>
-
-      {!isRecording ? (
-        <>
-          {/* ── Start new capture ──────────────────────────────────── */}
-          <div className="panel max-w-2xl p-6">
-            <h2 className="mb-4 text-lg font-bold">Start a new capture</h2>
-            <p className="mb-4 text-sm text-[var(--app-muted)]">
-              You&apos;ll be prompted to share your screen. Gemini Vision will analyze
-              screenshots every {FRAME_INTERVAL_MS / 1000}s and detect your actions automatically.
-            </p>
+      {!session ? (
+        <div className="space-y-6">
+          <section className="panel max-w-2xl p-6">
+            <h2 className="mb-4 text-lg font-bold">New Capture</h2>
             <div className="flex gap-3">
               <input
                 className="input flex-1"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder="e.g. Employee onboarding in Google Admin"
+                placeholder="e.g. Employee onboarding flow"
               />
               <button
                 onClick={startCapture}
                 disabled={starting}
-                className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+                className="btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm"
               >
                 {starting ? (
-                  <span className="animate-spin inline-flex">
-                    <CircleNotch size={15} />
+                  <span className="flex animate-spin">
+                    <CircleNotch size={14} />
                   </span>
                 ) : (
-                  <Desktop size={15} weight="bold" />
+                  <Record size={14} weight="fill" />
                 )}
-                {starting ? 'Starting…' : 'Share screen & record'}
+                {starting ? 'Starting…' : 'Record'}
               </button>
             </div>
-          </div>
+          </section>
 
-          {/* ── Past captures ──────────────────────────────────────── */}
           {captures.length > 0 && (
-            <section className="mt-6">
-              <p className="landing-kicker mb-3">Previous captures</p>
+            <section className="space-y-3">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--app-muted)] px-1">Previous Captures</h2>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {captures.map(cap => (
-                  <div key={cap.id} className="panel-tight p-4">
+                  <div key={cap.id} className="panel p-4">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold text-sm">{cap.title}</h3>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold capitalize ${
-                          cap.status === 'compiled'
-                            ? 'bg-[rgba(123,155,134,0.18)] text-[#335443]'
-                            : cap.status === 'completed'
-                              ? 'bg-[rgba(191,155,106,0.18)] text-[#7d5d31]'
-                              : 'bg-[rgba(95,119,132,0.18)] text-[#3f5e6f]'
-                        }`}
-                      >
+                      <h3 className="font-bold text-sm truncate">{cap.title}</h3>
+                      <span className="rounded-md bg-[rgba(27,42,74,0.05)] border border-[rgba(27,42,74,0.05)] px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--app-muted)]">
                         {cap.status}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-[var(--app-muted)]">
-                      {cap.raw_events.length} events recorded
-                    </p>
+                    <p className="mt-1 text-xs text-[var(--app-muted)]">{cap.raw_events.length} events recorded</p>
                     {cap.playbook_id && (
-                      <a
-                        href={`/team/${teamId}/playbooks/${cap.playbook_id}`}
-                        className="mt-2 inline-block text-xs font-semibold text-[var(--app-blue)] hover:underline"
+                      <button
+                        onClick={() => router.push(`/team/${teamId}/playbooks/${cap.playbook_id}`)}
+                        className="mt-3 text-xs font-bold text-[var(--app-brand-sand)] hover:underline"
                       >
                         View playbook &rarr;
-                      </a>
+                      </button>
                     )}
                   </div>
                 ))}
               </div>
             </section>
           )}
-        </>
+        </div>
       ) : (
-        <>
-          {/* ── Recording session ──────────────────────────────────── */}
-          <div className="panel p-6">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-4 mb-6">
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div>
               <div className="flex items-center gap-3">
-                <span className="relative flex h-3 w-3">
+                <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-                  <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
                 </span>
-                <h2 className="text-lg font-bold">Recording: {session.title}</h2>
+                <h2 className="font-bold">{session.title}</h2>
               </div>
-              <div className="flex items-center gap-3">
-                {analyzing && (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-[var(--app-muted)]">
-                    <span className="inline-flex animate-pulse text-[var(--app-blue)]">
-                      <Eye size={14} />
-                    </span>
-                    Gemini analyzing…
-                  </span>
-                )}
-                <span className="text-xs text-[var(--app-muted)]">
-                  {frameCount} frames · {events.length} events
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">
+                  Screen live
                 </span>
-
-                {/* ── Gemini Live toggle ─── */}
-                {!liveActive ? (
-                  <button
-                    onClick={startLiveSession}
-                    title="Start a live voice session with Gemini"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--app-blue)]/30 bg-[var(--app-blue)]/8 px-3 py-1.5 text-xs font-semibold text-[var(--app-blue)] transition-all hover:bg-[var(--app-blue)]/14 hover:border-[var(--app-blue)]/50"
-                  >
-                    <WaveTriangle size={12} weight="fill" />
-                    Start Live Session
-                  </button>
-                ) : (
-                  <button
-                    onClick={stopLiveSession}
-                    title="Turn off Gemini Live"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[#4a8566]/30 bg-[rgba(80,139,130,0.1)] px-3 py-1.5 text-xs font-semibold text-[#4a8566] transition-all hover:border-[#4a8566]/50 hover:bg-[rgba(80,139,130,0.16)]"
-                  >
-                    <Microphone size={12} weight="fill" />
-                    Live session active
-                  </button>
-                )}
-
-                <button
-                  onClick={finalizeAndCompile}
-                  disabled={compiling || events.length === 0}
-                  className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
-                >
-                  {compiling ? (
-                    <span className="animate-spin inline-flex">
-                      <CircleNotch size={15} />
-                    </span>
-                  ) : (
-                    <Lightning size={15} weight="fill" />
-                  )}
-                  {compiling ? 'Compiling…' : 'Stop & compile'}
-                </button>
+                <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                  analyzing
+                    ? 'border-[rgba(15,103,143,0.12)] bg-[rgba(15,103,143,0.08)] text-[var(--app-blue)]'
+                    : 'border-[var(--app-line-soft)] bg-white text-[var(--app-muted)]'
+                }`}>
+                  {analyzing ? 'Vision analyzing' : 'Vision ready'}
+                </span>
+                <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                  liveActive
+                    ? 'border-[rgba(217,138,63,0.16)] bg-[rgba(217,138,63,0.1)] text-[var(--app-brand-sand)]'
+                    : 'border-[var(--app-line-soft)] bg-white text-[var(--app-muted)]'
+                }`}>
+                  {liveActive ? 'Voice live' : 'Voice optional'}
+                </span>
               </div>
             </div>
 
-            {/* Screen preview + timeline side by side */}
-            <div className="grid gap-6 lg:grid-cols-5">
-              {/* Video preview */}
-              <div className="lg:col-span-3">
-                <div className="rounded-xl border border-[var(--app-line)] bg-black/5 overflow-hidden">
+            <div className="flex flex-wrap items-center gap-3">
+              {!liveActive ? (
+                <button
+                  onClick={startLiveSession}
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--app-line-soft)] px-3 py-1.5 text-xs font-bold text-[var(--app-muted)] hover:bg-[rgba(27,42,74,0.02)]"
+                >
+                  <WaveTriangle size={12} weight="fill" />
+                  Start Navigator voice
+                </button>
+              ) : (
+                <button
+                  onClick={() => { liveStop(); setLiveActive(false); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700"
+                >
+                  <Microphone size={12} weight="fill" />
+                  Voice active
+                </button>
+              )}
+
+              <button
+                onClick={finalizeAndCompile}
+                disabled={compiling || groundedEvents.length === 0}
+                className="btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm"
+              >
+                {compiling ? (
+                  <span className="flex animate-spin">
+                    <CircleNotch size={14} />
+                  </span>
+                ) : (
+                  <Lightning size={14} weight="fill" />
+                )}
+                {compiling ? 'Compiling…' : 'Compile Playbook'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-5">
+            <div className="space-y-4 lg:col-span-3">
+              <div className="panel overflow-hidden p-0">
+                <div className="flex items-center justify-between border-b border-[var(--app-line-soft)] px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex rounded-lg bg-[rgba(27,42,74,0.06)] p-2 text-[var(--app-muted)]">
+                      <Desktop size={16} weight="fill" />
+                    </span>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">
+                        Screen stream
+                      </p>
+                      <p className="text-sm font-semibold">Live browser capture</p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-semibold text-[var(--app-muted)]">
+                    Frames analyzed: {frameCount}
+                  </p>
+                </div>
+                <div className="bg-black/5 p-2">
                   <video
                     ref={videoRef}
                     muted
                     playsInline
                     autoPlay
-                    className="w-full aspect-video object-contain bg-black/90"
+                    className="aspect-video w-full rounded-lg bg-black/95 object-contain shadow-2xl"
                   />
                 </div>
-                <p className="mt-2 text-xs text-[var(--app-muted)] text-center">
-                  Screen preview — Gemini analyses a frame every {FRAME_INTERVAL_MS / 1000}s
-                </p>
               </div>
 
-              {/* Live event timeline */}
-              <div className="lg:col-span-2">
-                <h3 className="mb-3 text-sm font-semibold flex items-center gap-2">
-                  <span className="inline-flex text-red-500">
-                    <Record size={14} weight="fill" />
-                  </span>
-                  Detected actions ({events.length})
-                </h3>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="panel p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                    Grounded detections
+                  </p>
+                  <p className="mt-1 text-2xl font-bold">{groundedEvents.length}</p>
+                </div>
+                <div className="panel p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                    Voice exchanges
+                  </p>
+                  <p className="mt-1 text-2xl font-bold">
+                    {events.filter(event => event.kind === 'voice_note' || event.kind === 'gemini_clarification').length}
+                  </p>
+                </div>
+                <div className="panel p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                    Latest mode
+                  </p>
+                  <p className="mt-1 text-sm font-bold capitalize">
+                    {latestTimelineEvent?.kind?.replace('_', ' ') || 'Waiting for context'}
+                  </p>
+                </div>
+              </div>
 
+              {liveActive || transcript.length > 0 ? (
+                <GeminiLivePanel
+                  status={liveStatus}
+                  transcript={transcript}
+                  isMuted={isMuted}
+                  onMute={mute}
+                  onUnmute={unmute}
+                  onStop={() => {
+                    liveStop();
+                    setLiveActive(false);
+                  }}
+                />
+              ) : (
+                <div className="panel border-dashed p-5">
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex rounded-lg bg-[rgba(217,138,63,0.1)] p-2 text-[var(--app-brand-sand)]">
+                      <WaveTriangle size={16} weight="fill" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Navigator voice makes Teach Mode feel live.</p>
+                      <p className="mt-1 text-sm leading-relaxed text-[var(--app-muted)]">
+                        The screen observer sends grounded actions, and the voice copilot asks short follow-ups when the intent is ambiguous.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4 lg:col-span-2">
+              <div className="panel p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <Eye size={16} className="text-[var(--app-blue)]" />
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">
+                      Navigator grounding
+                    </p>
+                    <p className="text-sm font-semibold">What the model can currently justify on screen</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.02)] p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                    Current frame
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed">
+                    {frameSummary || 'Waiting for the first grounded frame summary from the screen observer.'}
+                  </p>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-[var(--app-line-soft)] bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                        Latest grounded event
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {lastGroundedEvent?.text || 'No grounded action detected yet'}
+                      </p>
+                    </div>
+                    {lastGroundedEvent?.confidence != null && (
+                      <span className="rounded-full border border-[rgba(15,103,143,0.14)] bg-[rgba(15,103,143,0.08)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-blue)]">
+                        {Math.round(lastGroundedEvent.confidence * 100)}% confidence
+                      </span>
+                    )}
+                  </div>
+
+                  {lastGroundedEvent?.observed_text && (
+                    <p className="mt-3 rounded-lg bg-[rgba(27,42,74,0.03)] px-3 py-2 text-xs font-medium text-[var(--app-muted)]">
+                      Observed text: {lastGroundedEvent.observed_text}
+                    </p>
+                  )}
+
+                  {lastGroundedEvent?.evidence && lastGroundedEvent.evidence.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {lastGroundedEvent.evidence.map((item, index) => (
+                        <span
+                          key={`${item}-${index}`}
+                          className="rounded-full border border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.02)] px-2.5 py-1 text-[10px] font-bold text-[var(--app-muted)]"
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">
+                  Live timeline ({events.length})
+                </h3>
                 {events.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-[var(--app-line)] p-8 text-center">
-                    <span className="mx-auto mb-3 inline-flex text-[var(--app-muted)] opacity-40">
+                  <div className="panel border-dashed bg-[rgba(27,42,74,0.01)] p-8 text-center">
+                    <span className="mx-auto mb-3 block text-[var(--app-muted)] opacity-20">
                       <Eye size={32} />
                     </span>
                     <p className="text-sm text-[var(--app-muted)]">
-                      Perform actions on the shared screen.
-                      <br />
-                      Gemini will detect them here.
+                      Memoo is waiting for a grounded browser interaction or voice note.
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                  <div className="scrollbar-hide max-h-[760px] space-y-2 overflow-y-auto pr-2">
                     {events.map((ev, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-3 rounded-xl border border-[var(--app-line)] px-4 py-3 animate-in slide-in-from-top-1 fade-in duration-300"
-                      >
-                        <span className="font-mono text-xs text-[var(--app-muted)] w-6 shrink-0 pt-0.5">
-                          {String(idx + 1).padStart(2, '0')}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span
-                              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold capitalize ${
-                                KIND_COLORS[ev.kind] ?? KIND_COLORS.action
-                              }`}
-                            >
-                              {ev.kind}
-                            </span>
-                            {ev.url && (
-                              <span className="truncate text-[10px] font-mono text-[var(--app-muted)]">
-                                {ev.url}
+                      <div key={`${ev.kind}-${idx}-${ev.timestamp ?? 't'}`} className="panel p-3">
+                        <div className="flex items-start gap-3">
+                          <span className="w-5 pt-0.5 text-[10px] font-mono font-bold text-[var(--app-muted)]">
+                            {(idx + 1).toString().padStart(2, '0')}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                              <span className={`rounded-md border p-1 px-1.5 text-[9px] font-bold uppercase ${KIND_COLORS[ev.kind] || KIND_COLORS.action}`}>
+                                {ev.kind.replace('_', ' ')}
                               </span>
+                              {ev.confidence != null && (
+                                <span className="rounded-full bg-[rgba(27,42,74,0.05)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                                  {Math.round(ev.confidence * 100)}%
+                                </span>
+                              )}
+                              {ev.timestamp && (
+                                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                                  {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                            </div>
+
+                            {ev.text && <p className="text-sm font-bold leading-snug">{ev.text}</p>}
+                            {ev.url && <p className="mt-1 truncate font-mono text-[10px] text-[var(--app-muted)]">{ev.url}</p>}
+                            {ev.value && <p className="mt-1 truncate text-[10px] text-[var(--app-muted)]">Value: {ev.value}</p>}
+                            {ev.observed_text && (
+                              <p className="mt-2 text-xs leading-relaxed text-[var(--app-muted)]">
+                                Observed text: {ev.observed_text}
+                              </p>
+                            )}
+                            {ev.frame_summary && ev.kind !== 'voice_note' && ev.kind !== 'gemini_clarification' && (
+                              <p className="mt-2 text-xs leading-relaxed text-[var(--app-muted)]">
+                                Frame: {ev.frame_summary}
+                              </p>
+                            )}
+                            {ev.evidence && ev.evidence.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {ev.evidence.map((item, evidenceIndex) => (
+                                  <span
+                                    key={`${item}-${evidenceIndex}`}
+                                    className="rounded-full border border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.02)] px-2 py-1 text-[10px] font-bold text-[var(--app-muted)]"
+                                  >
+                                    {item}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
-                          {ev.text && (
-                            <p className="text-sm text-[var(--app-fg)]">{ev.text}</p>
-                          )}
-                          {ev.selector && (
-                            <code className="text-[10px] text-[var(--app-muted)] bg-[var(--app-surface-2)] px-1 rounded">
-                              {ev.selector}
-                            </code>
-                          )}
-                          {ev.value && (
-                            <span className="block text-xs text-[var(--app-muted)] mt-0.5">
-                              → {ev.value}
-                            </span>
-                          )}
+                          <button
+                            onClick={() => setEvents(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-[var(--app-muted)] transition-colors hover:text-red-500"
+                          >
+                            <Trash size={14} />
+                          </button>
                         </div>
-                        <button
-                          onClick={() => removeEvent(idx)}
-                          className="shrink-0 text-[var(--app-muted)] hover:text-red-500 transition-colors pt-0.5"
-                        >
-                          <Trash size={13} />
-                        </button>
                       </div>
                     ))}
                   </div>
@@ -631,7 +591,7 @@ export default function CapturePage() {
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
     </PlatformShell>
   );

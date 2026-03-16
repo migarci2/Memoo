@@ -201,6 +201,11 @@ class CaptureEventIn(BaseModel):
     value: str | None = None
     text: str | None = None
     timestamp: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    evidence: list[str] = Field(default_factory=list)
+    observed_text: str | None = None
+    frame_summary: str | None = None
+    source: str | None = None
 
 
 class CaptureOut(BaseModel):
@@ -236,11 +241,18 @@ class FrameAnalysisEvent(BaseModel):
     selector: str | None = None
     value: str | None = None
     text: str | None = None
+    timestamp: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    evidence: list[str] = Field(default_factory=list)
+    observed_text: str | None = None
+    frame_summary: str | None = None
+    source: str | None = None
 
 
 class FrameAnalysisOut(BaseModel):
     detected: bool
     events: list[FrameAnalysisEvent]
+    frame_summary: str | None = None
 
 
 # ── Sandbox ──────────────────────────────────────────────────────────────────

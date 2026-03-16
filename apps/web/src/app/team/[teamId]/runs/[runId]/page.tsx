@@ -8,7 +8,6 @@ import {
   CircleNotch,
   Desktop,
   FileText,
-  Lock,
   Sparkle,
   XCircle,
 } from '@phosphor-icons/react';
@@ -74,7 +73,6 @@ function buildAgentSnapshot(items: RunItem[]) {
 
 function latestRunEvent(eventsByItem: Record<string, RunEvent[]>): RunEvent | null {
   let latest: RunEvent | null = null;
-
   for (const events of Object.values(eventsByItem)) {
     for (const event of events) {
       if (!latest || new Date(event.created_at).getTime() > new Date(latest.created_at).getTime()) {
@@ -82,7 +80,6 @@ function latestRunEvent(eventsByItem: Record<string, RunEvent[]>): RunEvent | nu
       }
     }
   }
-
   return latest;
 }
 
@@ -93,19 +90,18 @@ export default function RunDetailPage() {
   const [loading, setLoading] = useState(true);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchDetail = () => {
     apiGet<RunDetail>(`/runs/${runId}`)
       .then(setDetail)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [runId]);
+  };
 
-  // Poll while running or pending
+  useEffect(fetchDetail, [runId]);
+
   useEffect(() => {
     if (!detail || (detail.run.status !== 'running' && detail.run.status !== 'pending')) return;
-    const timer = setInterval(() => {
-      apiGet<RunDetail>(`/runs/${runId}`).then(setDetail).catch(() => {});
-    }, 2000);
+    const timer = setInterval(fetchDetail, 2000);
     return () => clearInterval(timer);
   }, [detail?.run?.status, runId]);
 
@@ -129,400 +125,278 @@ export default function RunDetailPage() {
   }
 
   const { run, items, events_by_item, playbook_name } = detail;
-  const successRate =
-    run.total_items > 0
-      ? Math.round((run.success_count / run.total_items) * 100)
-      : 0;
+  const successRate = run.total_items > 0 ? Math.round((run.success_count / run.total_items) * 100) : 0;
   const sandboxNovncUrl = getSandboxNovncUrl();
   const agentSnapshot = buildAgentSnapshot(items);
   const lastEvent = latestRunEvent(events_by_item);
+
   const agentStatusTone =
     run.status === 'failed'
-      ? 'border-[rgba(176,64,64,0.18)] bg-[rgba(176,64,64,0.08)] text-[#8b3a3a]'
+      ? 'border-red-100 bg-red-50 text-red-700'
       : run.status === 'completed'
-        ? 'border-[rgba(74,140,97,0.2)] bg-[rgba(74,140,97,0.1)] text-[#335443]'
-        : 'border-[rgba(15,103,143,0.2)] bg-[rgba(15,103,143,0.08)] text-[var(--app-blue)]';
+        ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+        : 'border-amber-100 bg-amber-50 text-amber-700';
+
   const agentStatusLabel =
     run.status === 'failed'
-      ? 'Run needs attention'
+      ? 'Run failed'
       : run.status === 'completed'
         ? 'Run finished'
-        : 'Playbook is running live';
-  const agentSummary =
-    agentSnapshot.agentBrief
-    || agentSnapshot.agentContextText
-    || 'No extra note was provided. This run is using the playbook plus any secure credentials selected for it.';
+        : 'Running…';
 
   return (
-    <PlatformShell teamId={teamId}>
+    <PlatformShell 
+      teamId={teamId}
+      title={`${playbook_name || 'Run'} #${run.id.slice(0, 8)}`}
+      subtitle={run.use_sandbox ? "Live sandbox execution" : "Headless background run"}
+    >
       <button
         onClick={() => router.push(`/team/${teamId}/runs`)}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--app-blue)] hover:underline"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--app-brand-sand)] hover:underline"
       >
         <ArrowLeft size={14} />
         All runs
       </button>
 
-      <div className="mb-6">
-        <p className="landing-kicker">Run detail</p>
-        <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
-          {playbook_name || 'Playbook run'} #{run.id.slice(0, 8)}
-        </h1>
-        {run.use_sandbox && (
-          <p className="mt-2 max-w-[72ch] text-sm text-[var(--app-muted)]">
-            This run stays attached to the live sandbox so you can watch the playbook repeat its actions in the same browser session.
-          </p>
-        )}
-      </div>
-
-      {/* KPI strip */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6">
         {[
-          { label: 'Status', value: run.status, capitalize: true },
-          { label: 'Total items', value: run.total_items },
+          { label: 'Status', value: run.status },
+          { label: 'Items', value: run.total_items },
           { label: 'Passed', value: run.success_count },
-          { label: 'Success rate', value: `${successRate}%` },
+          { label: 'Success', value: `${successRate}%` },
         ].map(kpi => (
-          <div key={kpi.label} className="panel-tight p-4">
-            <p className="text-xs font-medium text-[var(--app-muted)]">{kpi.label}</p>
-            <p className={`mt-0.5 text-xl font-extrabold ${kpi.capitalize ? 'capitalize' : ''}`}>
-              {kpi.value}
-            </p>
+          <div key={kpi.label} className="panel p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">{kpi.label}</p>
+            <p className="mt-1 text-lg font-bold capitalize">{kpi.value}</p>
           </div>
         ))}
       </div>
 
-      {run.use_sandbox && (
-        <div className="mb-6 grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
-          <section className="overflow-hidden rounded-[28px] border border-[var(--app-line)] bg-[linear-gradient(135deg,rgba(10,20,35,0.03),rgba(15,103,143,0.09))] p-5 shadow-[0_18px_40px_-24px_rgba(7,37,62,0.22)]">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="max-w-2xl">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex rounded-2xl bg-[rgba(15,103,143,0.12)] p-2 text-[var(--app-blue)]">
-                    <Sparkle size={18} weight="duotone" />
+      <div className="grid gap-6 xl:grid-cols-[1fr_320px] mb-8">
+        <div className="space-y-6">
+          {run.use_sandbox && (
+            <section className="panel overflow-hidden p-5">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex rounded-xl bg-[rgba(217,138,63,0.1)] p-2.5 text-[var(--app-brand-sand)]">
+                    <Desktop size={20} weight="fill" />
                   </span>
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--app-muted)]">
-                      Playbook session
-                    </p>
-                    <h2 className="mt-1 text-2xl font-extrabold tracking-tight">
-                      The preview is the run
-                    </h2>
+                    <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">Live Sandbox</h2>
+                    <p className="text-lg font-bold">Browser Preview</p>
                   </div>
                 </div>
-                <p className="mt-4 max-w-[68ch] text-sm leading-6 text-[var(--app-muted)]">
-                  Every listed playbook step runs against the exact browser session you see below.
-                  You can watch the navigation, clicks, form input, and verification happen live.
-                </p>
-              </div>
-
-              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${agentStatusTone}`}>
-                <span className={`h-2 w-2 rounded-full ${
-                  run.status === 'running' ? 'animate-pulse bg-current' : 'bg-current'
-                }`} />
-                {agentStatusLabel}
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-white/60 bg-white/75 p-4 backdrop-blur">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">
-                  Session type
-                </p>
-                <p className="mt-2 text-sm font-semibold text-[var(--app-text)]">
-                  Visible sandbox browser
-                </p>
-                <p className="mt-1 text-xs leading-5 text-[var(--app-muted)]">
-                  The playbook and your preview stay on the same browser tab.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/60 bg-white/75 p-4 backdrop-blur">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">
-                  Started
-                </p>
-                <p className="mt-2 text-sm font-semibold text-[var(--app-text)]">
-                  {formatDateTime(run.started_at)}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-[var(--app-muted)]">
-                  Status updates refresh automatically while the run is active.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/60 bg-white/75 p-4 backdrop-blur">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">
-                  Last verification
-                </p>
-                <p className="mt-2 text-sm font-semibold text-[var(--app-text)]">
-                  {lastEvent ? lastEvent.step_title : 'No verification yet'}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-[var(--app-muted)]">
-                  {lastEvent ? formatDateTime(lastEvent.created_at) : 'The run has not produced step logs yet.'}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel-tight p-5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex rounded-2xl bg-[rgba(15,103,143,0.08)] p-2 text-[var(--app-blue)]">
-                <FileText size={18} weight="duotone" />
-              </span>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--app-muted)]">
-                  Agent context
-                </p>
-                <h2 className="mt-1 text-lg font-extrabold tracking-tight">
-                  Run context
-                </h2>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface-2)] p-4">
-              <p className="text-sm leading-6 text-[var(--app-text)]">
-                {agentSummary}
-              </p>
-            </div>
-
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              <div className="rounded-2xl border border-[var(--app-line)] bg-[var(--app-bg)] p-3">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">
-                  Files
-                </p>
-                <p className="mt-1 text-xl font-extrabold">{agentSnapshot.attachmentCount}</p>
-              </div>
-              <div className="rounded-2xl border border-[var(--app-line)] bg-[var(--app-bg)] p-3">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">
-                  Text
-                </p>
-                <p className="mt-1 text-xl font-extrabold">{agentSnapshot.textAttachmentCount}</p>
-              </div>
-              <div className="rounded-2xl border border-[var(--app-line)] bg-[var(--app-bg)] p-3">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">
-                  Images
-                </p>
-                <p className="mt-1 text-xl font-extrabold">{agentSnapshot.imageAttachmentCount}</p>
-              </div>
-            </div>
-
-            {agentSnapshot.attachmentLines.length > 0 && (
-              <div className="mt-4">
-                <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">
-                  Attached material
-                </p>
-                <div className="space-y-2">
-                  {agentSnapshot.attachmentLines.map(line => (
-                    <div
-                      key={line}
-                      className="rounded-xl border border-[var(--app-line)] bg-[var(--app-bg)] px-3 py-2 text-xs text-[var(--app-muted)]"
-                    >
-                      {line.replace(/^- /, '')}
-                    </div>
-                  ))}
+                <div className={`rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase ${agentStatusTone}`}>
+                  {agentStatusLabel}
                 </div>
               </div>
-            )}
-          </section>
-        </div>
-      )}
-
-      {/* Sandbox live viewer */}
-      {run.use_sandbox && (
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="inline-flex text-[var(--app-blue)]">
-              <Desktop size={18} weight="regular" />
-            </span>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--app-muted)]">
-              Live sandbox
-            </h2>
-            <span className="rounded-full bg-[rgba(15,103,143,0.08)] px-2.5 py-1 text-[11px] font-bold text-[var(--app-blue)]">
-              Playbook attached
-            </span>
-            {run.status === 'running' && (
-              <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[rgba(76,175,80,0.15)] px-2.5 py-0.5 text-[11px] font-bold text-[#4a8c61]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#4a8c61] animate-pulse" />
-                Live
-              </span>
-            )}
-          </div>
-          <div
-            className="panel overflow-hidden rounded-[28px] border border-[rgba(15,23,42,0.08)] bg-[#0f1720] shadow-[0_28px_80px_-36px_rgba(15,23,42,0.65)]"
-            style={{ height: 'clamp(32rem, 72vh, 58rem)' }}
-          >
-            <iframe
-              src={sandboxNovncUrl}
-              className="h-full w-full border-0"
-              allow="clipboard-read; clipboard-write"
-              title="Sandbox browser — live view"
-            />
-          </div>
-          <p className="mt-2 text-xs text-[var(--app-muted)]">
-            You can interact with the browser above. The automation runs in the same session.
-          </p>
-        </div>
-      )}
-
-      {/* Playbook Flow / Nodes */}
-      {detail.playbook_steps && detail.playbook_steps.length > 0 && (() => {
-        const activeItem = expandedItem
-          ? items.find((i) => i.id === expandedItem)
-          : (items.find((i) => i.status === 'running') || items[0]);
-        const activeItemEvents = activeItem ? events_by_item[activeItem.id] || [] : [];
-        const lastCompletedSequence = activeItemEvents.filter((e) => e.status === 'success' || e.status === 'completed').length > 0
-          ? Math.max(...activeItemEvents.filter((e) => e.status === 'success' || e.status === 'completed').map((e) => e.step_sequence))
-          : 0;
-        const currentRunningSequence = activeItemEvents.find((e) => e.status === 'running')?.step_sequence 
-          ?? (activeItem?.status === 'running' ? lastCompletedSequence + 1 : -1);
-
-        return (
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="inline-flex text-[var(--app-muted)]">
-                <FileText size={18} weight="regular" />
-              </span>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--app-muted)]">
-                Playbook Flow {activeItem && <span className="normal-case font-normal ml-2 opacity-70">(Row {activeItem.row_index + 1})</span>}
-              </h2>
-            </div>
-            <div className="flex overflow-x-auto gap-3 pb-3 snap-x">
-              {detail.playbook_steps.map((step, idx) => {
-                const seq = step.sequence ?? idx + 1;
-                let stepStatus = 'pending';
-                
-                const ev = activeItemEvents.find((e) => e.step_sequence === seq);
-                if (ev) {
-                  stepStatus = ev.status;
-                } else if (seq === currentRunningSequence) {
-                  stepStatus = 'running';
-                } else if (seq < currentRunningSequence) {
-                  stepStatus = activeItem?.status === 'failed' ? 'pending' : 'success';
-                }
-
-                let cardClass = "panel shrink-0 w-48 p-4 snap-start border transition-colors ";
-                let badgeClass = "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ";
-
-                if (stepStatus === 'success' || stepStatus === 'completed') {
-                  cardClass += "border-[#4a8c61] bg-[rgba(76,175,80,0.03)]";
-                  badgeClass += "bg-[#4a8c61] text-[#fff]";
-                } else if (stepStatus === 'running') {
-                  cardClass += "border-[var(--app-blue)] shadow-[0_0_0_1px_var(--app-blue)] bg-[#0f1720]";
-                  badgeClass += "bg-[var(--app-blue)] text-[#fff] animate-pulse";
-                } else if (stepStatus === 'failed') {
-                  cardClass += "border-[#8b3a3a] bg-[rgba(191,100,100,0.05)]";
-                  badgeClass += "bg-[#8b3a3a] text-[#fff]";
-                } else {
-                  cardClass += "border-[var(--app-line)] bg-[var(--app-bg)] opacity-60";
-                  badgeClass += "bg-[var(--app-line)] text-[var(--app-muted)]";
-                }
-
-                return (
-                  <div key={idx} className={cardClass}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={badgeClass}>
-                        {seq}
-                      </span>
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--app-muted)]">
-                        {step.step_type}
-                      </span>
-                      {stepStatus === 'running' && (
-                        <span className="ml-auto flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-[var(--app-blue)] opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--app-blue)]"></span>
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-semibold truncate" title={step.title}>
-                      {step.title || 'Untitled'}
-                    </p>
-                    {step.target_url && (
-                      <p className="mt-1 text-[11px] truncate text-[var(--app-muted)]" title={step.target_url}>
-                        {step.target_url}
-                      </p>
-                    )}
-                    {step.selector && (
-                      <p className="mt-1 font-mono text-[10px] truncate text-[var(--app-muted)]" title={step.selector}>
-                        {step.selector}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Items + events */}
-      <div className="space-y-3">
-        {items.map((item: RunItem, idx: number) => {
-          const isExpanded = expandedItem === item.id;
-          const itemEvents: RunEvent[] = events_by_item[item.id] || [];
-
-          return (
-            <div key={item.id} className="panel overflow-hidden">
-              <button
-                onClick={() => setExpandedItem(isExpanded ? null : item.id)}
-                className="flex w-full items-center gap-3 p-4 text-left"
+              
+              <div
+                className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.1)] bg-[#0f1720]"
+                style={{ height: '480px' }}
               >
-                {STATUS_ICON[item.status] ?? STATUS_ICON.pending}
-                <span className="font-mono text-xs text-[var(--app-muted)] w-8 shrink-0">
-                  Row {item.row_index + 1}
-                </span>
-                <span className="flex-1 text-sm font-semibold truncate">
-                  {item.input_payload
-                    ? Object.values(item.input_payload).join(' · ')
-                    : `Item ${idx + 1}`}
-                </span>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold capitalize ${
-                  item.status === 'completed'
-                    ? 'bg-[rgba(123,155,134,0.18)] text-[#335443]'
-                    : item.status === 'failed'
-                    ? 'bg-[rgba(191,100,100,0.18)] text-[#8b3a3a]'
-                    : 'bg-[var(--app-chip)] text-[var(--app-muted)]'
-                }`}>
-                  {item.status}
-                </span>
-              </button>
+                <iframe
+                  src={sandboxNovncUrl}
+                  className="h-full w-full border-0"
+                  allow="clipboard-read; clipboard-write"
+                  title="Sandbox"
+                />
+              </div>
+            </section>
+          )}
 
-              {isExpanded && itemEvents.length > 0 && (
-                <div className="border-t border-[var(--app-line)] bg-[var(--app-surface-2)] px-4 py-3">
-                  <p className="mb-2 text-xs font-bold text-[var(--app-muted)] uppercase tracking-wider">
-                    Verification log
-                  </p>
-                  <div className="space-y-2">
-                    {itemEvents.map((ev: RunEvent) => (
-                      <div
-                        key={ev.id}
-                        className="flex items-start gap-3 rounded-lg border border-[var(--app-line)] bg-[var(--app-bg)] px-3 py-2"
-                      >
-                        {STATUS_ICON[ev.status] ?? STATUS_ICON.pending}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold">{ev.step_title}</p>
-                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[var(--app-muted)]">
-                            {ev.expected_state && (
-                              <span>Expected: <span className="font-mono">{ev.expected_state}</span></span>
-                            )}
-                            {ev.actual_state && (
-                              <span>Actual: <span className="font-mono">{ev.actual_state}</span></span>
-                            )}
-                            {ev.vault_credential_used && (
-                              <span className="inline-flex items-center gap-1 text-[var(--app-blue)]">
-                                <Lock size={11} weight="fill" />
-                                Using {ev.vault_credential_used} (secure)
+          {detail.playbook_steps && detail.playbook_steps.length > 0 && (() => {
+            const activeItem = expandedItem ? items.find(i => i.id === expandedItem) : (items.find(i => i.status === 'running') || items[0]);
+            const activeItemEvents = activeItem ? events_by_item[activeItem.id] || [] : [];
+            const completedEvents = activeItemEvents.filter(e => e.status === 'success');
+            const lastSeq = completedEvents.length > 0 ? Math.max(...completedEvents.map(e => e.step_sequence)) : 0;
+            const currentSeq = activeItem?.status === 'running' ? lastSeq + 1 : -1;
+
+            return (
+              <>
+                <section className="panel p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <FileText size={18} className="text-[var(--app-muted)]" />
+                    <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">Playbook Flow</h2>
+                  </div>
+                  <div className="scrollbar-hide flex gap-3 overflow-x-auto pb-2">
+                    {detail.playbook_steps.map((step, idx) => {
+                      const seq = step.sequence ?? idx + 1;
+                      const ev = activeItemEvents.find(e => e.step_sequence === seq);
+                      const status = ev ? ev.status : (seq === currentSeq ? 'running' : (seq <= lastSeq ? 'success' : 'pending'));
+                      
+                      let cls = "shrink-0 w-44 p-3 rounded-xl border transition-all ";
+                      if (status === 'success') cls += "border-emerald-100 bg-emerald-50/30";
+                      else if (status === 'running') cls += "border-amber-200 bg-amber-50/50 ring-1 ring-amber-200";
+                      else if (status === 'failed') cls += "border-red-100 bg-red-50/30";
+                      else cls += "border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.01)] opacity-60";
+
+                      return (
+                        <div key={idx} className={cls}>
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[var(--app-text)] text-[10px] font-bold text-white">
+                              {seq}
+                            </span>
+                            <span className="truncate text-[9px] font-bold uppercase tracking-wider text-[var(--app-muted)]">
+                              {step.step_type}
+                            </span>
+                          </div>
+                          <p className="truncate text-xs font-bold">{step.title || 'Step'}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="panel p-5">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Desktop size={18} className="text-[var(--app-brand-sand)]" />
+                      <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">Execution Evidence</h2>
+                    </div>
+                    {activeItem ? (
+                      <span className="rounded-full border border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.03)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                        Row {activeItem.row_index + 1}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {activeItemEvents.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-[var(--app-line-soft)] px-4 py-6 text-center text-sm text-[var(--app-muted)]">
+                      Waiting for the first step event.
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      {activeItemEvents.map(event => (
+                        <div key={event.id} className="overflow-hidden rounded-2xl border border-[var(--app-line-soft)] bg-white">
+                          {event.screenshot_url ? (
+                            <img
+                              src={event.screenshot_url}
+                              alt={`Evidence for ${event.step_title}`}
+                              className="h-56 w-full bg-[rgba(27,42,74,0.04)] object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-24 items-center justify-center bg-[rgba(27,42,74,0.03)] text-xs font-semibold text-[var(--app-muted)]">
+                              Screenshot not available for this step
+                            </div>
+                          )}
+                          <div className="space-y-3 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                                  Step {event.step_sequence}
+                                </p>
+                                <p className="mt-1 text-sm font-semibold">{event.step_title}</p>
+                              </div>
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${
+                                event.status === 'success'
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : event.status === 'failed'
+                                    ? 'bg-red-50 text-red-700'
+                                    : 'bg-amber-50 text-amber-700'
+                              }`}>
+                                {event.status}
                               </span>
+                            </div>
+
+                            {event.actual_state && (
+                              <p className="text-sm leading-relaxed text-[var(--app-text)]">
+                                {event.actual_state}
+                              </p>
                             )}
+
+                            <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.12em]">
+                              {event.expected_state && (
+                                <span className="rounded-full border border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.03)] px-2.5 py-1 text-[var(--app-muted)]">
+                                  Expected: {event.expected_state}
+                                </span>
+                              )}
+                              {event.vault_credential_used && (
+                                <span className="rounded-full border border-[rgba(217,138,63,0.18)] bg-[rgba(217,138,63,0.08)] px-2.5 py-1 text-[var(--app-brand-sand)]">
+                                  Vault: {event.vault_credential_used}
+                                </span>
+                              )}
+                              <span className="rounded-full border border-[var(--app-line-soft)] bg-white px-2.5 py-1 text-[var(--app-muted)]">
+                                {formatDateTime(event.created_at)}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <span className="shrink-0 font-mono text-[11px] text-[var(--app-muted)]">
-                          Step {ev.step_sequence}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </>
+            );
+          })()}
+        </div>
+
+        <aside className="space-y-6">
+          <div className="panel p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkle size={18} className="text-[var(--app-brand-sand)]" />
+              <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">Run Context</h2>
             </div>
-          );
-        })}
+            <p className="text-sm leading-relaxed text-[var(--app-text)] bg-[rgba(27,42,74,0.02)] p-3 rounded-lg border border-[var(--app-line-soft)] mb-4">
+              {agentSnapshot.agentBrief || agentSnapshot.agentContextText || 'No custom context.'}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-[rgba(27,42,74,0.02)] p-2.5 rounded-lg border border-[var(--app-line-soft)] text-center">
+                <p className="text-[10px] font-bold uppercase text-[var(--app-muted)]">Files</p>
+                <p className="text-lg font-bold">{agentSnapshot.attachmentCount}</p>
+              </div>
+              <div className="bg-[rgba(27,42,74,0.02)] p-2.5 rounded-lg border border-[var(--app-line-soft)] text-center">
+                <p className="text-[10px] font-bold uppercase text-[var(--app-muted)]">Text</p>
+                <p className="text-lg font-bold">{agentSnapshot.textAttachmentCount}</p>
+              </div>
+            </div>
+
+            {lastEvent && (
+              <div className="mt-4 rounded-xl border border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.02)] p-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                  Latest agent note
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--app-text)]">
+                  {lastEvent.actual_state || lastEvent.step_title}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--app-muted)] px-1">Run Items</h2>
+            {items.map(item => {
+              const expanded = expandedItem === item.id;
+              const evs = events_by_item[item.id] || [];
+              return (
+                <div key={item.id} className="panel overflow-hidden">
+                  <button
+                    onClick={() => setExpandedItem(expanded ? null : item.id)}
+                    className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-[rgba(27,42,74,0.01)]"
+                  >
+                    {STATUS_ICON[item.status] || STATUS_ICON.pending}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold truncate">Row {item.row_index + 1}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase ${item.status === 'completed' ? 'text-emerald-600' : item.status === 'failed' ? 'text-red-600' : 'text-[var(--app-muted)]'}`}>
+                      {item.status}
+                    </span>
+                  </button>
+                  {expanded && evs.length > 0 && (
+                    <div className="border-t border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.01)] p-3 space-y-2">
+                      {evs.map(ev => (
+                        <div key={ev.id} className="flex items-start gap-2 text-[11px]">
+                          <span className="mt-0.5">{STATUS_ICON[ev.status]}</span>
+                          <p className="flex-1 font-medium">{ev.step_title}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </aside>
       </div>
     </PlatformShell>
   );

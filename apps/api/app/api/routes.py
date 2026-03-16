@@ -82,6 +82,8 @@ logger = logging.getLogger(__name__)
 ALLOWED_STEP_TYPES = {'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'action'}
 ALLOWED_CAPTURE_EVENT_KINDS = ALLOWED_STEP_TYPES
 NON_ACTION_EVENT_KINDS = {'voice_note', 'gemini_clarification'}
+SUPPORTED_CAPTURE_EVENT_KINDS = ALLOWED_CAPTURE_EVENT_KINDS | NON_ACTION_EVENT_KINDS
+FRAME_EVENT_MIN_CONFIDENCE = 0.55
 
 
 def _clean_text(value: object, max_len: int) -> str | None:
@@ -99,15 +101,34 @@ def _clean_text(value: object, max_len: int) -> str | None:
 
 def _normalize_capture_event(event: dict) -> dict | None:
     kind = event.get('kind')
-    if kind not in ALLOWED_CAPTURE_EVENT_KINDS:
+    if kind not in SUPPORTED_CAPTURE_EVENT_KINDS:
         return None
+
+    confidence = event.get('confidence')
+    normalized_confidence: float | None = None
+    if isinstance(confidence, (int, float)):
+        normalized_confidence = max(0.0, min(1.0, float(confidence)))
+
+    evidence = [
+        cleaned
+        for item in (event.get('evidence') or [])
+        if isinstance(item, str)
+        for cleaned in [_clean_text(item, 180)]
+        if cleaned
+    ][:4]
+
     return {
         'kind': kind,
-        'url': event.get('url'),
-        'selector': event.get('selector'),
-        'value': event.get('value'),
-        'text': event.get('text'),
-        'timestamp': event.get('timestamp'),
+        'url': _clean_text(event.get('url'), 500),
+        'selector': _clean_text(event.get('selector'), 320),
+        'value': _clean_text(event.get('value'), 320),
+        'text': _clean_text(event.get('text'), 500),
+        'timestamp': _clean_text(event.get('timestamp'), 80),
+        'confidence': normalized_confidence,
+        'evidence': evidence,
+        'observed_text': _clean_text(event.get('observed_text'), 280),
+        'frame_summary': _clean_text(event.get('frame_summary'), 280),
+        'source': _clean_text(event.get('source'), 80),
     }
 
 
@@ -732,6 +753,8 @@ async def add_capture_events(
     for ev in events:
         normalized = _normalize_capture_event(ev.model_dump(exclude_none=True))
         if normalized:
+            if not normalized.get('timestamp'):
+                normalized['timestamp'] = datetime.now(UTC).isoformat()
             current.append(normalized)
     capture.raw_events = current
 
@@ -780,7 +803,12 @@ async def analyze_frame(
         for ev in result.get('events', [])
         for normalized in [_normalize_capture_event(ev)]
         if normalized
+        if normalized.get('confidence') is None or normalized['confidence'] >= FRAME_EVENT_MIN_CONFIDENCE
     ]
+
+    for normalized in normalized_events:
+        if not normalized.get('timestamp'):
+            normalized['timestamp'] = datetime.now(UTC).isoformat()
 
     # Auto-save newly detected events into the capture
     if normalized_events:
@@ -792,6 +820,7 @@ async def analyze_frame(
     return FrameAnalysisOut(
         detected=bool(normalized_events),
         events=normalized_events,
+        frame_summary=_clean_text(result.get('frame_summary'), 280),
     )
 
 
@@ -820,7 +849,7 @@ async def compile_capture(capture_id: str, db: AsyncSession = Depends(get_db)) -
                 detail='No actionable capture events to compile.',
             )
 
-        compiled_steps = await compile_events(actionable_events)
+        compiled_steps = await compile_events(list(capture.raw_events or []))
 
         if not isinstance(compiled_steps, list):
             raise HTTPException(status_code=500, detail='Compiler returned invalid step list.')

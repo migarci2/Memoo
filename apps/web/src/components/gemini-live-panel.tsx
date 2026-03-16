@@ -27,7 +27,7 @@ const STATUS_LABELS: Record<LiveSessionStatus, string> = {
   idle: 'Idle',
   connecting: 'Connecting…',
   listening: 'Listening',
-  speaking: 'Gemini speaking',
+  speaking: 'Navigator speaking',
   error: 'Connection error',
 };
 
@@ -157,7 +157,12 @@ export function GeminiLivePanel({
               <span className="inline-flex">
                 <GeminiLogo size={14} gradientId="gemini-live-header-logo" />
               </span>
-              <span className="text-xs font-bold text-[var(--app-text)]">Gemini Live</span>
+              <div className="leading-none">
+                <p className="text-xs font-bold text-[var(--app-text)]">Navigator Live</p>
+                <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--app-muted)]">
+                  Powered by Gemini
+                </p>
+              </div>
             </div>
 
             <span className={`text-[11px] font-medium ${STATUS_COLORS[status]}`}>
@@ -200,7 +205,7 @@ export function GeminiLivePanel({
         >
           {transcript.length === 0 ? (
             <p className="py-4 text-center text-[11px] text-[var(--app-muted)]">
-              Gemini will ask clarifying questions as you record steps. You can also speak at any time to add context.
+              Navigator will ask short clarifying questions as steps appear. You can also speak at any time to add business context.
             </p>
           ) : (
             transcript.map((entry, i) => <TranscriptBubble key={i} entry={entry} />)
@@ -213,7 +218,7 @@ export function GeminiLivePanel({
             <span className="h-1 w-1 animate-bounce rounded-full bg-[var(--app-blue)] [animation-delay:0ms]" />
             <span className="h-1 w-1 animate-bounce rounded-full bg-[var(--app-blue)] [animation-delay:150ms]" />
             <span className="h-1 w-1 animate-bounce rounded-full bg-[var(--app-blue)] [animation-delay:300ms]" />
-            <span className="ml-0.5">Gemini is speaking…</span>
+            <span className="ml-0.5">Navigator is speaking…</span>
           </div>
         )}
       </div>

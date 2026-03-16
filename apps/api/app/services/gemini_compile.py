@@ -16,8 +16,17 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 NON_ACTION_EVENT_KINDS = {'voice_note', 'gemini_clarification'}
 
-COMPILE_PROMPT = """You are an expert workflow analyst. Given the following raw browser interaction events 
+COMPILE_PROMPT = """You are an expert workflow analyst. Given the following raw browser interaction events
 recorded during a user session, produce a structured list of semantic playbook steps.
+
+The event stream may include:
+- grounded visual actions from the screen observer (`navigate`, `click`, `input`, `submit`, `verify`, `wait`, `action`)
+- `voice_note` entries spoken by the user during Teach Mode
+- `gemini_clarification` entries spoken by the Memoo Navigator voice assistant
+
+Use `voice_note` and `gemini_clarification` entries as context, but NEVER output
+them as standalone steps. They should influence step titles, variable detection,
+and guardrails only when relevant.
 
 For each step, output:
 - title: A clear, human-readable description of the action (e.g. "Fill in employee first name")
@@ -36,6 +45,10 @@ Important rules:
 3. Merge consecutive related events into single logical steps when appropriate
 4. Add verification guardrails where they make sense (after form submissions, page navigations)
 5. Keep step titles professional and clear
+6. When visual events contain grounded `observed_text`, `confidence`, or `evidence`, prefer
+   those visible details over assumptions
+7. If the user explicitly states a constraint in a `voice_note` (for example "double-check the
+   company email domain"), incorporate that into the most relevant step guardrail
 
 Respond ONLY with a valid JSON array. No markdown, no explanation.
 
@@ -65,6 +78,7 @@ async def compile_events(raw_events: list[dict]) -> list[dict]:
 
     try:
         from google import genai
+        from google.genai import types
 
         client = genai.Client(api_key=settings.google_api_key)
 
@@ -74,6 +88,9 @@ async def compile_events(raw_events: list[dict]) -> list[dict]:
         response = await client.aio.models.generate_content(
             model=settings.gemini_model,
             contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type='application/json',
+            ),
         )
 
         text = response.text.strip()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import re
 from datetime import UTC, datetime
@@ -21,6 +22,7 @@ from app.models.entities import (
     Team,
     VaultCredential,
 )
+from app.services.storage import public_url, upload_blob
 
 logger = logging.getLogger(__name__)
 _VAR_RE = re.compile(r'\{\{(\w+)\}\}')
@@ -212,10 +214,43 @@ async def execute_run(run_id: str) -> None:
                 steps = playbook_steps
 
                 emitted_events: dict[int, RunEvent] = {}
+                uploaded_screenshots: dict[int, str] = {}
+
+                async def maybe_upload_screenshot(result: dict) -> str | None:
+                    seq = int(result.get('sequence') or 0)
+                    if seq in uploaded_screenshots:
+                        return uploaded_screenshots[seq]
+
+                    screenshot_b64 = result.get('screenshot_b64')
+                    if not isinstance(screenshot_b64, str) or not screenshot_b64:
+                        return None
+
+                    try:
+                        image_bytes = base64.b64decode(screenshot_b64)
+                    except Exception:
+                        logger.warning('Invalid screenshot payload for run_id=%s step=%s', run.id, seq)
+                        return None
+
+                    try:
+                        object_key = await upload_blob(
+                            image_bytes,
+                            filename=f'row-{item.row_index + 1:02d}-step-{seq:02d}.png',
+                            content_type='image/png',
+                            folder=f'runs/{run.id}',
+                        )
+                        screenshot_url = public_url(object_key)
+                        uploaded_screenshots[seq] = screenshot_url
+                        return screenshot_url
+                    except Exception:
+                        logger.exception('Failed to upload evidence screenshot run_id=%s step=%s', run.id, seq)
+                        return None
 
                 async def on_step_update(result: dict) -> None:
                     seq = int(result.get('sequence') or 0)
                     status = result.get('status', 'running')
+                    screenshot_url = None
+                    if status != 'running':
+                        screenshot_url = await maybe_upload_screenshot(result)
 
                     if seq not in emitted_events:
                         used_names = step_credential_usage.get(seq, set())
@@ -228,6 +263,7 @@ async def execute_run(run_id: str) -> None:
                             status=status,
                             expected_state=result.get('expected_state', ''),
                             actual_state=result.get('actual_state', ''),
+                            screenshot_url=screenshot_url,
                             vault_credential_used=vault_used,
                         )
                         db.add(ev)
@@ -236,6 +272,8 @@ async def execute_run(run_id: str) -> None:
                         ev = emitted_events[seq]
                         ev.status = status
                         ev.actual_state = result.get('actual_state', '')
+                        if screenshot_url:
+                            ev.screenshot_url = screenshot_url
 
                     # We commit right away so the frontend polling /runs/id sees it
                     await db.commit()
@@ -262,6 +300,7 @@ async def execute_run(run_id: str) -> None:
                 # Make sure all final results are firmly committed, mainly for headless mode or edge cases
                 for result in step_results:
                     seq = int(result.get('sequence') or 0)
+                    screenshot_url = await maybe_upload_screenshot(result)
                     if seq not in emitted_events:
                         await on_step_update(result)
                     else:
@@ -269,6 +308,8 @@ async def execute_run(run_id: str) -> None:
                         ev = emitted_events[seq]
                         ev.status = result.get('status', 'failed')
                         ev.actual_state = result.get('actual_state', '')
+                        if screenshot_url:
+                            ev.screenshot_url = screenshot_url
                         await db.commit()
 
                     if result.get('status') == 'failed':
