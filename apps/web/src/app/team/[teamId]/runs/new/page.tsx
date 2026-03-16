@@ -259,26 +259,19 @@ export default function NewRunPage() {
   };
 
   return (
-    <PlatformShell teamId={teamId}>
-      <div className="mb-7 max-w-4xl">
-        <p className="landing-kicker">New run</p>
-        <h1 className="mt-1 text-4xl font-extrabold tracking-tight">Run a playbook</h1>
-        <p className="mt-2 max-w-[70ch] text-[var(--app-muted)]">
-          Pick a playbook, add optional run context, and watch the repeated steps execute in the live preview.
-        </p>
-      </div>
+    <PlatformShell 
+      teamId={teamId}
+      title="Run a playbook"
+      subtitle="Pick a playbook, add context, and watch the execution in the live sandbox."
+    >
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)]">
         <section className="panel overflow-hidden">
-          <div className="border-b border-[var(--app-line)] bg-[linear-gradient(135deg,rgba(12,23,39,0.02),rgba(37,99,235,0.06))] px-6 py-5">
-            <div className="flex items-start gap-3">
-              <div>
-                <h2 className="text-lg font-bold tracking-tight">Playbook run context</h2>
-                <p className="mt-1 text-sm text-[var(--app-muted)]">
-                  Extra context here is available while the playbook repeats its listed actions in the visible preview.
-                </p>
-              </div>
-            </div>
+          <div className="border-b border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.02)] px-6 py-5">
+            <h2 className="text-lg font-bold tracking-tight">Run context</h2>
+            <p className="mt-1 text-sm text-[var(--app-muted)]">
+              Context here is available while the playbook repeats its actions in the preview.
+            </p>
           </div>
 
           <div className="space-y-6 p-6">
@@ -304,11 +297,11 @@ export default function NewRunPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold">Preview</label>
-                <div className="rounded-2xl border border-[var(--app-blue)] bg-[rgba(37,99,235,0.08)] px-4 py-3 text-sm font-semibold text-[var(--app-blue)]">
+                <div className="rounded-xl border border-[rgba(217,138,63,0.16)] bg-[rgba(217,138,63,0.08)] px-4 py-3 text-sm font-semibold text-[var(--app-brand-sand)]">
                   Live sandbox preview
                 </div>
                 <p className="mt-2 text-xs text-[var(--app-muted)]">
-                  Manual runs stay visible so you can watch each playbook step happen in the browser.
+                  Watch steps happen in real-time.
                 </p>
               </div>
             </div>
@@ -338,37 +331,33 @@ export default function NewRunPage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center justify-between rounded-2xl border border-dashed border-[var(--app-line)] bg-[var(--app-surface-2)] px-4 py-4 text-left transition-colors hover:border-[var(--app-blue)] hover:bg-[rgba(37,99,235,0.04)]"
+                  className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--app-line-soft)] px-4 py-4 text-left transition-colors hover:border-[var(--app-brand-sand)] hover:bg-[rgba(217,138,63,0.03)]"
                 >
-                  <span className="inline-flex items-center gap-3">
-                    <span className="inline-flex rounded-xl bg-[rgba(37,99,235,0.1)] p-2 text-[var(--app-blue)]">
-                      <UploadSimple size={16} weight="duotone" />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold">Add files</span>
-                      <span className="block text-xs text-[var(--app-muted)]">
-                        PDFs, docs, notes, screenshots, CSVs
-                      </span>
-                    </span>
+                  <span className="inline-flex rounded-lg bg-[rgba(217,138,63,0.1)] p-2 text-[var(--app-brand-sand)]">
+                    <UploadSimple size={14} weight="bold" />
                   </span>
+                  <div>
+                    <span className="block text-sm font-semibold">Add files</span>
+                    <span className="block text-[10px] text-[var(--app-muted)] uppercase font-bold tracking-wider">
+                      PDF, Image, CSV
+                    </span>
+                  </div>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => folderInputRef.current?.click()}
-                  className="flex items-center justify-between rounded-2xl border border-dashed border-[var(--app-line)] bg-[var(--app-surface-2)] px-4 py-4 text-left transition-colors hover:border-[var(--app-blue)] hover:bg-[rgba(37,99,235,0.04)]"
+                  className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--app-line-soft)] px-4 py-4 text-left transition-colors hover:border-[var(--app-brand-sand)] hover:bg-[rgba(217,138,63,0.03)]"
                 >
-                  <span className="inline-flex items-center gap-3">
-                    <span className="inline-flex rounded-xl bg-[rgba(15,118,110,0.1)] p-2 text-[#0f766e]">
-                      <FolderOpen size={16} weight="duotone" />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold">Add a folder</span>
-                      <span className="block text-xs text-[var(--app-muted)]">
-                        Preserve file paths for larger context packs
-                      </span>
-                    </span>
+                  <span className="inline-flex rounded-lg bg-[rgba(217,138,63,0.1)] p-2 text-[var(--app-brand-sand)]">
+                    <FolderOpen size={14} weight="bold" />
                   </span>
+                  <div>
+                    <span className="block text-sm font-semibold">Add folder</span>
+                    <span className="block text-[10px] text-[var(--app-muted)] uppercase font-bold tracking-wider">
+                      Batch context
+                    </span>
+                  </div>
                 </button>
               </div>
 
@@ -389,20 +378,20 @@ export default function NewRunPage() {
               />
 
               {attachments.length > 0 ? (
-                <div className="mt-4 space-y-3">
+                <div className="mt-4 space-y-2">
                   {attachments.map(attachment => (
                     <div
                       key={attachment.id}
-                      className="rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface-2)] px-4 py-3"
+                      className="rounded-xl border border-[var(--app-line-soft)] px-4 py-3"
                     >
                       <div className="flex items-start gap-3">
-                        <span className="mt-0.5 inline-flex text-[var(--app-blue)]">
+                        <span className="mt-0.5 inline-flex text-[var(--app-brand-sand)]">
                           {attachmentIcon(attachment.kind)}
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate text-sm font-semibold">{attachment.name}</p>
-                            <span className="rounded-full bg-[var(--app-chip)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                            <span className="rounded-full bg-[rgba(213,138,53,0.12)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#8b6133]">
                               {attachment.kind}
                             </span>
                             <span className="text-xs text-[var(--app-muted)]">
@@ -421,7 +410,7 @@ export default function NewRunPage() {
                         <button
                           type="button"
                           onClick={() => setAttachments(prev => prev.filter(item => item.id !== attachment.id))}
-                          className="inline-flex rounded-full p-1 text-[var(--app-muted)] transition-colors hover:bg-[var(--app-chip)] hover:text-[var(--app-fg)]"
+                          className="inline-flex rounded-full p-1 text-[var(--app-muted)] transition-colors hover:bg-[rgba(217,138,63,0.08)] hover:text-[var(--app-text)]"
                           aria-label={`Remove ${attachment.name}`}
                         >
                           <X size={14} />
@@ -431,25 +420,25 @@ export default function NewRunPage() {
                   ))}
                 </div>
               ) : (
-                <div className="mt-4 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface-2)] px-4 py-5 text-sm text-[var(--app-muted)]">
-                  No attachments yet. Add files only if this run needs extra context.
+                <div className="mt-4 rounded-xl border border-dashed border-[var(--app-line-soft)] px-4 py-5 text-sm text-[var(--app-muted)] text-center">
+                  No attachments yet.
                 </div>
               )}
             </div>
 
-            <div className="rounded-[1.75rem] border border-[var(--app-line)] bg-[var(--app-surface-2)] p-4">
+            <div className="rounded-xl border border-[var(--app-line-soft)] bg-[rgba(27,42,74,0.015)] p-4">
               <button
                 type="button"
                 onClick={() => setShowBatchTools(prev => !prev)}
                 className="flex w-full items-center justify-between text-left"
               >
                 <span>
-                  <span className="block text-sm font-semibold">Advanced: batch CSV</span>
-                  <span className="mt-1 block text-xs text-[var(--app-muted)]">
-                    Use this only when you want one run item per row.
+                  <span className="block text-sm font-semibold">Batch CSV mode</span>
+                  <span className="mt-0.5 block text-xs text-[var(--app-muted)]">
+                    One run item per row.
                   </span>
                 </span>
-                <span className="rounded-full bg-[var(--app-chip)] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                <span className="rounded-lg bg-[rgba(217,138,63,0.12)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-brand-sand)]">
                   {showBatchTools ? 'Hide' : 'Show'}
                 </span>
               </button>
@@ -474,48 +463,32 @@ export default function NewRunPage() {
 
         <aside className="space-y-4">
           <div className="panel p-5">
-            <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--app-muted)]">
-              Run payload
+            <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">
+              Payload
             </h2>
-            <div className="mt-4 space-y-3 text-sm">
-              <div className="rounded-2xl bg-[var(--app-surface-2)] px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
-                  Mode
-                </p>
-                <p className="mt-1 text-xl font-extrabold">Playbook run</p>
+            <div className="mt-4 space-y-1.5 text-sm">
+              <div className="flex items-center justify-between rounded-lg bg-[rgba(27,42,74,0.03)] px-3 py-2">
+                <span className="text-xs font-semibold text-[var(--app-muted)]">Mode</span>
+                <span className="font-bold">Playbook run</span>
               </div>
-              <div className="rounded-2xl bg-[var(--app-surface-2)] px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
-                  Items
-                </p>
-                <p className="mt-1 text-2xl font-extrabold">
-                  {showBatchTools && parsedCsvRows.length > 0 ? parsedCsvRows.length : 1}
-                </p>
+              <div className="flex items-center justify-between rounded-lg bg-[rgba(27,42,74,0.03)] px-3 py-2">
+                <span className="text-xs font-semibold text-[var(--app-muted)]">Items</span>
+                <span className="font-bold">{showBatchTools && parsedCsvRows.length > 0 ? parsedCsvRows.length : 1}</span>
               </div>
-              <div className="rounded-2xl bg-[var(--app-surface-2)] px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
-                  Attachments
-                </p>
-                <p className="mt-1 text-2xl font-extrabold">{attachments.length}</p>
+              <div className="flex items-center justify-between rounded-lg bg-[rgba(27,42,74,0.03)] px-3 py-2">
+                <span className="text-xs font-semibold text-[var(--app-muted)]">Files</span>
+                <span className="font-bold">{attachments.length}</span>
               </div>
-              <div className="rounded-2xl bg-[var(--app-surface-2)] px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
-                  Vault credentials
-                </p>
-                <p className="mt-1 text-2xl font-extrabold">{selectedVaultIds.length}</p>
-              </div>
-              <div className="rounded-2xl bg-[var(--app-surface-2)] px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
-                  Browser
-                </p>
-                <p className="mt-1 text-xl font-extrabold">Live sandbox</p>
+              <div className="flex items-center justify-between rounded-lg bg-[rgba(27,42,74,0.03)] px-3 py-2">
+                <span className="text-xs font-semibold text-[var(--app-muted)]">Vault</span>
+                <span className="font-bold">{selectedVaultIds.length}</span>
               </div>
             </div>
           </div>
 
           <div className="panel p-5">
-            <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--app-muted)]">
-              Vault credentials
+            <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">
+              Vault
             </h2>
             {vaultCredentials.length === 0 ? (
               <p className="mt-4 text-sm text-[var(--app-muted)]">
@@ -528,10 +501,10 @@ export default function NewRunPage() {
                   return (
                     <label
                       key={credential.id}
-                      className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm transition-colors ${
+                      className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
                         selected
-                          ? 'border-[var(--app-blue)] bg-[rgba(37,99,235,0.08)]'
-                          : 'border-[var(--app-line)] bg-[var(--app-surface-2)]'
+                          ? 'border-[var(--app-brand-sand)] bg-[rgba(217,138,63,0.05)] text-[var(--app-text)]'
+                          : 'border-[var(--app-line-soft)] bg-white text-[var(--app-muted)]'
                       }`}
                     >
                       <input
@@ -564,7 +537,7 @@ export default function NewRunPage() {
           <button
             onClick={startRun}
             disabled={submitting}
-            className="btn-primary flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold disabled:opacity-60"
+            className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm disabled:opacity-60"
           >
             {submitting ? (
               <span className="inline-flex animate-spin"><CircleNotch size={15} /></span>

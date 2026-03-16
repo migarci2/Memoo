@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import {
   BookBookmark,
   PlayCircle,
@@ -9,31 +8,17 @@ import {
   ArrowRight,
   Plus,
   Play,
-  Clock
 } from '@phosphor-icons/react';
 import Link from 'next/link';
 
 import { PlatformShell } from '@/components/platform-shell';
 import type { Playbook, Run, TeamOverview } from '@/lib/types';
 
-const STATUS_COLORS: Record<string, string> = {
-  completed: 'bg-[rgba(80,139,130,0.15)] text-[#3b665f]',
-  running: 'bg-[rgba(79,117,139,0.15)] text-[#405e6f]',
-  pending: 'bg-[rgba(173,131,92,0.12)] text-[#7a5c41]',
-  failed: 'bg-[rgba(175,91,91,0.12)] text-[#8a4848]',
-};
-
-const containerVariant = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.05 }
-  }
-};
-
-const itemVariant = {
-  hidden: { opacity: 0, y: 10 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } }
+const STATUS_DOT: Record<string, string> = {
+  completed: 'bg-emerald-500',
+  running: 'bg-amber-500',
+  pending: 'bg-gray-400',
+  failed: 'bg-red-500',
 };
 
 interface DashboardClientProps {
@@ -49,249 +34,155 @@ export function DashboardClient({ teamId, overview, playbooks, runs }: Dashboard
       ? Math.round((overview.successful_runs / overview.total_runs) * 100)
       : 0;
 
+  const kpis = [
+    { icon: BookBookmark, label: 'Playbooks', value: overview.playbooks_count, sub: `${overview.active_playbooks} active` },
+    { icon: PlayCircle, label: 'Runs', value: overview.total_runs, sub: 'Total executions' },
+    { icon: CheckCircle, label: 'Success', value: `${successRate}%`, sub: `${overview.successful_runs} passed` },
+    { icon: Vault, label: 'Vault', value: overview.vault_credentials, sub: 'Credentials' },
+  ];
+
   return (
     <PlatformShell
       teamId={teamId}
       title="Dashboard"
-      subtitle="Automation overview — your playbooks, recent runs, and vault."
+      subtitle="Your playbooks, recent runs, and team overview."
     >
-      <motion.div variants={containerVariant} initial="hidden" animate="show">
-        {/* KPI Strip */}
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <motion.article
-            variants={itemVariant}
-            className="group relative overflow-hidden rounded-3xl border border-[var(--app-line)] bg-gradient-to-b from-[var(--app-surface)] to-[var(--app-surface)] p-6 transition-all hover:shadow-lg hover:-translate-y-1"
+      {/* ── KPI Row ── */}
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {kpis.map(kpi => (
+          <div
+            key={kpi.label}
+            className="flex items-center gap-3 rounded-xl border border-[var(--app-line-soft)] bg-white p-4"
           >
-            <div className="absolute right-4 top-4 text-[var(--app-blue)]/40 transition-transform duration-500 group-hover:scale-110">
-              <BookBookmark size={60} weight="regular" />
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[rgba(27,42,74,0.05)] text-[var(--app-muted)]">
+              <kpi.icon size={18} weight="regular" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-2xl font-extrabold tracking-tight leading-none">{kpi.value}</p>
+              <p className="mt-0.5 text-xs text-[var(--app-muted)]">{kpi.sub}</p>
             </div>
-            <div className="relative z-10 flex items-center gap-3">
-              <div className="rounded-xl bg-[var(--app-chip)] p-2 text-[var(--app-blue)]">
-                <BookBookmark size={20} weight="bold" />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">Playbooks</p>
-            </div>
-            <div className="relative z-10 mt-4">
-              <p className="text-4xl font-extrabold tracking-tight text-[var(--app-text)]">{overview.playbooks_count}</p>
-              <p className="mt-1 text-sm font-medium text-[var(--app-muted)]">{overview.active_playbooks} active</p>
-            </div>
-          </motion.article>
+          </div>
+        ))}
+      </section>
 
-          <motion.article
-            variants={itemVariant}
-            className="group relative overflow-hidden rounded-3xl border border-[var(--app-line)] bg-gradient-to-b from-[var(--app-surface)] to-[var(--app-surface)] p-6 transition-all hover:shadow-lg hover:-translate-y-1"
-          >
-            <div className="absolute right-4 top-4 text-[var(--app-blue)]/40 transition-transform duration-500 group-hover:scale-110">
-              <PlayCircle size={60} weight="regular" />
-            </div>
-            <div className="relative z-10 flex items-center gap-3">
-              <div className="rounded-xl bg-[var(--app-chip)] p-2 text-[var(--app-blue)]">
-                <PlayCircle size={20} weight="bold" />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">Total Runs</p>
-            </div>
-            <div className="relative z-10 mt-4">
-              <p className="text-4xl font-extrabold tracking-tight text-[var(--app-text)]">{overview.total_runs}</p>
-              <p className="mt-1 text-sm font-medium text-[var(--app-muted)]">Batch executions</p>
-            </div>
-          </motion.article>
+      <div className="mt-6 grid gap-4 xl:grid-cols-[1.3fr_1fr]">
+        {/* ── Recent Runs ── */}
+        <section className="rounded-xl border border-[var(--app-line-soft)] bg-white">
+          <div className="flex items-center justify-between border-b border-[var(--app-line-soft)] px-4 py-3">
+            <h2 className="text-base font-bold">Recent runs</h2>
+            <Link
+              href={`/team/${teamId}/runs`}
+              className="flex items-center gap-1 text-xs font-semibold text-[var(--app-muted)] hover:text-[var(--app-text)]"
+            >
+              View all <ArrowRight size={12} />
+            </Link>
+          </div>
 
-          <motion.article
-            variants={itemVariant}
-            className="group relative overflow-hidden rounded-3xl border border-[var(--app-line)] bg-gradient-to-b from-[var(--app-surface)] to-[var(--app-surface)] p-6 transition-all hover:shadow-lg hover:-translate-y-1"
-          >
-            <div className="absolute right-4 top-4 text-[var(--app-blue)]/40 transition-transform duration-500 group-hover:scale-110">
-              <CheckCircle size={60} weight="regular" />
+          {runs.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <p className="text-sm text-[var(--app-muted)]">No runs yet. Execute a playbook to see results here.</p>
+              <Link
+                href={`/team/${teamId}/runs/new`}
+                className="btn-primary mt-4 inline-flex items-center gap-2 text-sm"
+              >
+                <Play size={14} weight="fill" /> Start a run
+              </Link>
             </div>
-            <div className="relative z-10 flex items-center gap-3">
-              <div className="rounded-xl bg-[var(--app-chip)] p-2 text-[var(--app-blue)]">
-                <CheckCircle size={20} weight="bold" />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">Success Rate</p>
+          ) : (
+            <div className="divide-y divide-[var(--app-line-soft)]">
+              {runs.slice(0, 5).map(run => (
+                <Link
+                  key={run.id}
+                  href={`/team/${teamId}/runs/${run.id}`}
+                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(27,42,74,0.02)]"
+                >
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[run.status] ?? STATUS_DOT.pending}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{run.input_source ?? `Run ${run.id.slice(0, 8)}`}</p>
+                    <p className="text-xs text-[var(--app-muted)]">
+                      {run.total_items} items · {run.success_count} passed
+                      {run.failed_count > 0 ? ` · ${run.failed_count} failed` : ''}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-md bg-[rgba(27,42,74,0.04)] px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--app-muted)]">
+                    {run.status}
+                  </span>
+                </Link>
+              ))}
             </div>
-            <div className="relative z-10 mt-4">
-              <p className="text-4xl font-extrabold tracking-tight text-[var(--app-text)]">{successRate}%</p>
-              <p className="mt-1 text-sm font-medium text-[var(--app-muted)]">{overview.successful_runs} successful</p>
-            </div>
-          </motion.article>
-
-          <motion.article
-            variants={itemVariant}
-            className="group relative overflow-hidden rounded-3xl border border-[var(--app-line)] bg-gradient-to-b from-[var(--app-surface)] to-[var(--app-surface)] p-6 transition-all hover:shadow-lg hover:-translate-y-1"
-          >
-            <div className="absolute right-4 top-4 text-[var(--app-blue)]/40 transition-transform duration-500 group-hover:scale-110">
-              <Vault size={60} weight="regular" />
-            </div>
-            <div className="relative z-10 flex items-center gap-3">
-              <div className="rounded-xl bg-[var(--app-chip)] p-2 text-[var(--app-blue)]">
-                <Vault size={20} weight="bold" />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">Vault</p>
-            </div>
-            <div className="relative z-10 mt-4">
-              <p className="text-4xl font-extrabold tracking-tight text-[var(--app-text)]">{overview.vault_credentials}</p>
-              <p className="mt-1 text-sm font-medium text-[var(--app-muted)]">Secure credentials</p>
-            </div>
-          </motion.article>
+          )}
         </section>
 
-        <section className="mt-8 grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-          {/* Recent Runs */}
-          <motion.article variants={itemVariant} className="panel rounded-3xl p-6 shadow-sm">
-            <div className="mb-6 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-[var(--app-chip)] p-2.5 text-[var(--app-blue)]">
-                  <Clock size={22} weight="bold" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold tracking-tight">Recent runs</h2>
-                </div>
-              </div>
+        {/* ── Right Column ── */}
+        <div className="space-y-4">
+          {/* Quick actions */}
+          <div className="grid grid-cols-2 gap-3">
+            <Link
+              href={`/team/${teamId}/capture`}
+              className="flex flex-col items-center gap-2 rounded-xl border border-[var(--app-line-soft)] bg-white px-4 py-5 text-center transition-colors hover:border-[var(--app-brand-teal)] hover:bg-[rgba(27,139,130,0.03)]"
+            >
+              <Plus size={20} weight="bold" className="text-[var(--app-brand-teal)]" />
+              <span className="text-sm font-semibold">Teach workflow</span>
+            </Link>
+            <Link
+              href={`/team/${teamId}/runs/new`}
+              className="flex flex-col items-center gap-2 rounded-xl border border-[var(--app-line-soft)] bg-white px-4 py-5 text-center transition-colors hover:border-[var(--app-brand-sand)] hover:bg-[rgba(217,138,63,0.03)]"
+            >
+              <Play size={20} weight="fill" className="text-[var(--app-brand-sand)]" />
+              <span className="text-sm font-semibold">Run batch</span>
+            </Link>
+          </div>
+
+          {/* Playbooks list */}
+          <section className="rounded-xl border border-[var(--app-line-soft)] bg-white">
+            <div className="flex items-center justify-between border-b border-[var(--app-line-soft)] px-4 py-3">
+              <h2 className="text-base font-bold">Playbooks</h2>
               <Link
-                href={`/team/${teamId}/runs`}
-                className="group flex items-center gap-1.5 rounded-full border border-[var(--app-line)] bg-white px-4 py-1.5 text-xs font-bold text-[var(--app-blue)] transition-all hover:bg-[var(--app-blue)] hover:text-white"
+                href={`/team/${teamId}/playbooks`}
+                className="flex items-center gap-1 text-xs font-semibold text-[var(--app-muted)] hover:text-[var(--app-text)]"
               >
-                View all
-                <span className="transition-transform group-hover:translate-x-0.5">
-                  <ArrowRight size={12} weight="bold" />
-                </span>
+                View all <ArrowRight size={12} />
               </Link>
             </div>
 
-            {runs.length === 0 ? (
-              <div className="rounded-2xl border-2 border-dashed border-[var(--app-line)] px-6 py-12 text-center transition-colors hover:border-[var(--app-blue)]/30 hover:bg-[var(--app-blue)]/5">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--app-blue)]/10 text-[var(--app-blue)] transition-transform group-hover:scale-110 group-hover:bg-[var(--app-blue)] group-hover:text-white">
-                  <PlayCircle size={24} weight="regular" />
-                </div>
-                <p className="mt-4 text-lg font-bold">No runs yet</p>
-                <p className="mt-1 text-sm font-medium text-[var(--app-muted)]">
-                  Execute a playbook with batch data to see results here.
-                </p>
-                <Link
-                  href={`/team/${teamId}/runs/new`}
-                  className="btn-primary mt-6 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm transition-transform active:scale-95"
-                >
-                  <Play size={16} weight="fill" />
-                  Start a run
-                </Link>
+            {playbooks.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm text-[var(--app-muted)]">No playbooks yet. Teach a workflow to get started.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {runs.slice(0, 5).map((run) => (
+              <div className="divide-y divide-[var(--app-line-soft)]">
+                {playbooks.slice(0, 4).map(playbook => (
                   <Link
-                    key={run.id}
-                    href={`/team/${teamId}/runs/${run.id}`}
-                    className="group flex items-center justify-between gap-4 rounded-2xl border border-[var(--app-line)] bg-white/50 px-5 py-4 transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
+                    key={playbook.id}
+                    href={`/team/${teamId}/playbooks/${playbook.id}`}
+                    className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-[rgba(27,42,74,0.02)]"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-base font-bold text-[var(--app-text)] transition-colors group-hover:text-[var(--app-blue)]">
-                        {run.input_source ?? `Run ${run.id.slice(0, 8)}`}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="text-xs font-semibold text-[var(--app-muted)]">
-                          {run.total_items} items
-                        </span>
-                        <span className="h-1 w-1 rounded-full bg-[var(--app-line-strong)]"></span>
-                        <span className="text-xs font-semibold text-[#3b665f]">
-                          {run.success_count} passed
-                        </span>
-                        {run.failed_count > 0 && (
-                          <>
-                            <span className="h-1 w-1 rounded-full bg-[var(--app-line-strong)]"></span>
-                            <span className="text-xs font-semibold text-red-600">
-                              {run.failed_count} failed
-                            </span>
-                          </>
-                        )}
-                      </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{playbook.name}</p>
+                      {playbook.tags.length > 0 && (
+                        <div className="mt-1 flex gap-1.5">
+                          {playbook.tags.slice(0, 2).map(tag => (
+                            <span key={tag} className="rounded bg-[rgba(27,42,74,0.04)] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--app-muted)]">{tag}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="shrink-0 flex items-center gap-4">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-bold capitalize shadow-sm ${STATUS_COLORS[run.status] ?? STATUS_COLORS.pending
-                          }`}
-                      >
-                        {run.status}
-                      </span>
-                      <span className="text-[var(--app-line-strong)] transition-transform group-hover:translate-x-1 group-hover:text-[var(--app-blue)]">
-                        <ArrowRight size={16} weight="bold" />
-                      </span>
-                    </div>
+                    <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${
+                      playbook.status === 'active'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : playbook.status === 'draft'
+                          ? 'bg-gray-100 text-gray-600'
+                          : 'bg-amber-50 text-amber-700'
+                    }`}>
+                      {playbook.status}
+                    </span>
                   </Link>
                 ))}
               </div>
             )}
-          </motion.article>
-
-          {/* Quick Actions + Recent Playbooks */}
-          <div className="space-y-6">
-            {/* Quick actions */}
-            <motion.article variants={itemVariant} className="panel rounded-3xl p-6 shadow-sm">
-              <h2 className="text-xl font-bold tracking-tight">Quick actions</h2>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <Link
-                  href={`/team/${teamId}/capture`}
-                  className="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[rgba(30,96,128,0.18)] bg-[rgba(30,96,128,0.07)] px-4 py-5 font-bold text-[#1e6080] transition-all hover:-translate-y-1 hover:border-[rgba(30,96,128,0.32)] hover:bg-[rgba(30,96,128,0.12)] hover:shadow-md active:scale-95"
-                >
-                  <span className="transition-transform group-hover:rotate-90 group-hover:scale-110">
-                    <Plus size={24} weight="bold" />
-                  </span>
-                  <span className="text-sm tracking-wide">Teach workflow</span>
-                </Link>
-                <Link
-                  href={`/team/${teamId}/runs/new`}
-                  className="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[var(--app-line)] bg-white px-4 py-5 font-bold text-[#1e6080] transition-all hover:-translate-y-1 hover:border-[rgba(30,96,128,0.4)] hover:shadow-md active:scale-95"
-                >
-                  <span className="text-[var(--app-sage)] transition-transform group-hover:scale-110">
-                    <Play size={24} weight="fill" />
-                  </span>
-                  <span className="text-sm tracking-wide">Run batch</span>
-                </Link>
-              </div>
-            </motion.article>
-
-            {/* Recent playbooks */}
-            <motion.article variants={itemVariant} className="panel rounded-3xl p-6 shadow-sm">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <h2 className="text-xl font-bold tracking-tight">Playbooks</h2>
-                <Link
-                  href={`/team/${teamId}/playbooks`}
-                  className="group flex items-center gap-1.5 rounded-full border border-[var(--app-line)] bg-white px-3 py-1 text-xs font-bold text-[var(--app-blue)] transition-all hover:bg-[var(--app-blue)] hover:text-white"
-                >
-                  View all
-                </Link>
-              </div>
-
-              {playbooks.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[var(--app-line)] bg-white/40 p-4 text-center">
-                  <p className="text-sm font-medium text-[var(--app-muted)]">No playbooks yet. Teach a workflow to get started.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {playbooks.slice(0, 4).map(playbook => (
-                    <Link
-                      key={playbook.id}
-                      href={`/team/${teamId}/playbooks/${playbook.id}`}
-                      className="group flex items-center justify-between gap-3 rounded-2xl border border-[var(--app-line)] bg-white/50 px-4 py-3.5 transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-[var(--app-text)] transition-colors group-hover:text-[var(--app-blue)]">{playbook.name}</p>
-                        <div className="mt-1.5 flex gap-2">
-                          {playbook.tags.slice(0, 2).map(tag => (
-                            <span key={tag} className="rounded-md bg-[var(--app-chip)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--app-muted)]">{tag}</span>
-                          ))}
-                        </div>
-                      </div>
-                      <span className="shrink-0 rounded-full bg-[var(--app-chip)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--app-muted)] shadow-sm">
-                        {playbook.status}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </motion.article>
-          </div>
-        </section>
-      </motion.div>
+          </section>
+        </div>
+      </div>
     </PlatformShell>
   );
 }

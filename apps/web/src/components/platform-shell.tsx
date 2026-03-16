@@ -38,9 +38,9 @@ function Logo() {
   return (
     <Link href="/" className="inline-flex items-center gap-2 text-sm font-extrabold tracking-tight">
       <span className="grid grid-cols-2 grid-rows-2 gap-[3px]">
-        <span className="h-2.5 w-2.5 rounded-full bg-[var(--app-blue)]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[var(--app-sage)]" />
-        <span className="col-span-2 h-2.5 rounded-full bg-[var(--app-sand)]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[#1f5c84]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[#1b8b82]" />
+        <span className="col-span-2 h-2.5 rounded-full bg-[#d98a3f]" />
       </span>
       memoo
     </Link>
@@ -61,8 +61,8 @@ function NavLink({
       className={cn(
         'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-150',
         active
-          ? 'border-[var(--app-blue)]/20 bg-[var(--app-chip)] text-[var(--app-blue)]'
-          : 'border-[var(--app-line)] bg-[var(--app-surface)] text-[var(--app-muted)] hover:border-[var(--app-blue)]/25 hover:text-[var(--app-blue)]',
+          ? 'border-[rgba(27,42,74,0.12)] bg-[rgba(27,42,74,0.06)] text-[var(--app-text)]'
+          : 'border-transparent bg-transparent text-[var(--app-muted)] hover:border-[rgba(27,42,74,0.08)] hover:text-[var(--app-text)]',
       )}
     >
       <Icon size={15} weight="bold" />
@@ -78,7 +78,6 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  // Close profile dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
@@ -126,18 +125,17 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-[var(--app-bg)] text-[var(--app-text)]">
-      <div className="pointer-events-none absolute inset-0 opacity-45 [background-image:linear-gradient(to_right,rgba(17,33,48,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(17,33,48,0.07)_1px,transparent_1px)] [background-size:24px_24px]" />
 
-      <div className="relative mx-auto grid w-[min(1400px,calc(100%-1.25rem))] gap-4 py-3 lg:grid-cols-[250px_minmax(0,1fr)]">
+      <div className="relative mx-auto grid w-[min(1440px,calc(100%-1.25rem))] gap-4 py-3 lg:grid-cols-[270px_minmax(0,1fr)]">
         <aside className="hidden lg:block">
-          <div className="sticky top-3 flex h-[calc(100dvh-1.5rem)] flex-col rounded-3xl border border-[var(--app-line)] bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(241,247,252,0.9))] p-4 shadow-[0_18px_40px_rgba(15,33,52,0.12)]">
+          <div className="sticky top-3 flex h-[calc(100dvh-1.5rem)] flex-col rounded-[14px] border border-[var(--app-line-soft)] bg-white p-4 shadow-[var(--app-shadow-soft)]">
             <div className="flex items-center justify-between">
               <div className="group/logo logo-wiggle cursor-pointer">
                 <Logo />
               </div>
               <Link
                 href="/"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--app-line)] bg-white/70 text-[var(--app-muted)] transition-colors hover:border-[var(--app-blue)]/35 hover:text-[var(--app-blue)]"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--app-line-soft)] text-[var(--app-muted)] transition-colors hover:text-[var(--app-text)]"
                 title="Back to Landing"
               >
                 <ArrowSquareOut size={14} weight="bold" />
@@ -145,9 +143,9 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
             </div>
 
             {showAuthenticatedUi ? (
-              <div className="mt-6 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface)]/88 p-3 shadow-inner">
+              <div className="mt-5 rounded-xl border border-[var(--app-line-soft)] bg-[var(--app-surface-soft)] p-3">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-blue)] text-xs font-bold text-white shadow-sm ring-2 ring-white/50">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--app-text)] text-[10px] font-bold text-white">
                     {initials}
                   </span>
                   <div className="min-w-0">
@@ -163,7 +161,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
               </div>
             ) : null}
 
-            <nav className="mt-6 space-y-2">
+            <nav className="mt-5 space-y-1">
               {navItems.map(item => {
                 const active = item.href === `/team/${resolvedTeamId}` ? pathname === item.href : pathname.startsWith(item.href);
                 return (
@@ -171,31 +169,24 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'group relative flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm font-semibold transition-all',
+                      'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                       active
-                        ? 'border-[var(--app-blue)]/20 bg-[var(--app-chip)] text-[var(--app-blue)]'
-                        : 'border-transparent bg-transparent text-[var(--app-muted)] hover:border-[var(--app-line)] hover:bg-white/70 hover:text-[var(--app-blue)]',
+                        ? 'bg-[rgba(27,42,74,0.05)] text-[var(--app-text)]'
+                        : 'text-[var(--app-muted)] hover:bg-[rgba(27,42,74,0.03)] hover:text-[var(--app-text)]',
                     )}
                   >
-                    <span
-                      className={cn(
-                        'inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                        active ? 'bg-[var(--app-blue)]/16' : 'bg-[var(--app-chip)] group-hover:bg-[var(--app-blue)]/15',
-                      )}
-                    >
-                      <item.icon size={15} weight="bold" />
-                    </span>
+                    <item.icon size={16} weight={active ? 'bold' : 'regular'} />
                     {item.label}
                   </Link>
                 );
               })}
             </nav>
 
-            <div className="mt-auto rounded-2xl border border-[var(--app-line)] bg-white/75 p-2">
+            <div className="mt-auto rounded-lg border border-[var(--app-line-soft)] bg-[var(--app-surface-soft)] p-1.5">
               {showAuthenticatedUi ? (
                 <button
                   onClick={logout}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--app-muted)] transition-colors hover:bg-red-50 hover:text-red-600"
+                  className="flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-[var(--app-muted)] transition-colors hover:bg-red-50 hover:text-red-600"
                 >
                   <SignOut size={14} weight="bold" />
                   Sign out
@@ -203,7 +194,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
               ) : showPublicAuthCtas ? (
                 <Link
                   href="/login"
-                  className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--app-blue)] px-3 py-2 text-sm font-semibold text-white"
+                  className="inline-flex w-full items-center justify-center rounded-[16px] bg-[var(--app-text)] px-3 py-2.5 text-sm font-semibold text-white"
                 >
                   Enter demo
                 </Link>
@@ -216,7 +207,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
 
         <section className="min-w-0">
           <header className="sticky top-0 z-30 pb-3">
-            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface)]/90 px-4 py-2.5 shadow-[0_10px_24px_rgba(15,33,52,0.08)] backdrop-blur">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-[var(--app-line-soft)] bg-[rgba(255,255,255,0.85)] px-4 py-2.5 shadow-[var(--app-shadow-soft)] backdrop-blur-xl">
               <div className="lg:hidden">
                 <Logo />
               </div>
@@ -239,7 +230,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                 {showAuthenticatedUi ? (
                   <>
                     {displayName ? (
-                      <span className="hidden rounded-full border border-[var(--app-line)] bg-white/70 px-3 py-1 text-xs font-semibold text-[var(--app-muted)] sm:inline-block">
+                      <span className="hidden rounded-full border border-[var(--app-line)] bg-white px-3 py-1 text-xs font-semibold text-[var(--app-muted)] sm:inline-block">
                         {displayName}
                       </span>
                     ) : null}
@@ -250,18 +241,18 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                         aria-expanded={profileOpen}
                         aria-haspopup="menu"
                         aria-label="Open profile menu"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-blue)]/15 text-xs font-bold text-[var(--app-blue)] ring-1 ring-[var(--app-blue)]/20 transition-colors hover:bg-[var(--app-blue)] hover:text-white"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(27,42,74,0.06)] text-xs font-bold text-[var(--app-text)] ring-1 ring-[rgba(27,42,74,0.08)] transition-colors hover:bg-[var(--app-text)] hover:text-white"
                       >
                         {initials}
                       </button>
                       <div
                         className={cn(
-                          'absolute right-0 top-10 z-50 w-52 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface)] p-2 shadow-lg backdrop-blur transition-all duration-150',
+                          'absolute right-0 top-11 z-50 w-56 rounded-[20px] border border-[var(--app-line-soft)] bg-white p-2 shadow-[var(--app-shadow-panel)] backdrop-blur transition-all duration-150',
                           profileOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0',
                         )}
                         role="menu"
                       >
-                        <div className="border-b border-[var(--app-line)] pb-2 pl-2 pr-2 pt-1">
+                        <div className="border-b border-[var(--app-line-soft)] pb-2 pl-2 pr-2 pt-1">
                           <p className="text-sm font-semibold">{session.full_name}</p>
                           <p className="text-xs text-[var(--app-muted)]">{session.role}</p>
                         </div>
@@ -269,7 +260,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                           <Link
                             href={`/team/${resolvedTeamId}/settings`}
                             onClick={() => setProfileOpen(false)}
-                            className="mt-1 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm text-[var(--app-muted)] transition-colors hover:bg-[var(--app-chip)] hover:text-[var(--app-blue)]"
+                            className="mt-1 flex w-full items-center gap-2 rounded-[14px] px-2 py-2 text-sm text-[var(--app-muted)] transition-colors hover:bg-[rgba(27,42,74,0.04)] hover:text-[var(--app-text)]"
                           >
                             <GearSix size={14} weight="bold" />
                             Profile settings
@@ -281,7 +272,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                             setProfileOpen(false);
                             logout();
                           }}
-                          className="mt-1 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm text-[var(--app-muted)] transition-colors hover:bg-red-50 hover:text-red-600"
+                          className="mt-1 flex w-full items-center gap-2 rounded-[14px] px-2 py-2 text-sm text-[var(--app-muted)] transition-colors hover:bg-red-50 hover:text-red-600"
                         >
                           <SignOut size={14} weight="bold" />
                           Sign out
@@ -292,7 +283,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                 ) : showPublicAuthCtas ? (
                   <Link
                     href="/login"
-                    className="rounded-full bg-[var(--app-blue)] px-3 py-1.5 text-xs font-bold text-[var(--app-surface)] transition-opacity hover:opacity-90"
+                    className="rounded-full bg-[var(--app-text)] px-3 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
                   >
                     Enter demo
                   </Link>
@@ -302,7 +293,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
 
                 <button
                   onClick={() => setMobileOpen(true)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--app-line)] text-[var(--app-muted)] lg:hidden"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--app-line-soft)] text-[var(--app-muted)] lg:hidden"
                   aria-label="Open menu"
                 >
                   <List size={16} weight="bold" />
@@ -320,7 +311,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.18 }}
-                  className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
+                  className="fixed inset-0 z-40 bg-black/10 backdrop-blur-sm"
                   onClick={() => setMobileOpen(false)}
                 />
                 <motion.aside
@@ -329,13 +320,13 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                   animate={{ x: 0 }}
                   exit={{ x: '-100%' }}
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                  className="fixed bottom-0 left-0 top-0 z-50 w-72 bg-[var(--app-surface)] p-6 shadow-2xl"
+                  className="fixed bottom-0 left-0 top-0 z-50 w-72 border-r border-[var(--app-line-soft)] bg-white p-6 shadow-xl"
                 >
                   <div className="flex items-center justify-between">
                     <Logo />
                     <button
                       onClick={() => setMobileOpen(false)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--app-line)] text-[var(--app-muted)]"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--app-line-soft)] text-[var(--app-muted)]"
                       aria-label="Close menu"
                     >
                       <X size={14} weight="bold" />
@@ -343,7 +334,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                   </div>
 
                   {showAuthenticatedUi ? (
-                    <div className="mt-5 rounded-2xl border border-[var(--app-line)] bg-[var(--app-surface-2)] p-3">
+                    <div className="mt-5 rounded-[20px] border border-[var(--app-line-soft)] bg-[var(--app-surface-soft)] p-4">
                       <p className="font-semibold">{session.full_name}</p>
                       <p className="text-xs text-[var(--app-muted)]">{session.role}</p>
                     </div>
@@ -370,7 +361,7 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
                         setMobileOpen(false);
                         logout();
                       }}
-                      className="mt-6 flex w-full items-center gap-2 rounded-xl border border-red-200/60 px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                      className="mt-6 flex w-full items-center gap-2 rounded-[16px] border border-red-200/60 px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
                     >
                       <SignOut size={14} weight="bold" />
                       Sign out
@@ -383,12 +374,12 @@ export function PlatformShell({ teamId, teamName, title, subtitle, children }: P
 
           <main className="px-1 pb-4 pt-1 md:px-2">
             {(title ?? subtitle) ? (
-              <div className="mb-8 rounded-3xl border border-[var(--app-line)] bg-[linear-gradient(130deg,rgba(248,252,255,0.96),rgba(241,247,252,0.9))] p-5 shadow-[0_10px_26px_rgba(15,33,52,0.08)] md:p-7">
+              <div className="mb-6 rounded-xl border border-[var(--app-line-soft)] bg-white p-5 shadow-[var(--app-shadow-soft)]">
                 {title ? (
-                  <h1 className="text-3xl font-extrabold tracking-tight md:text-5xl">{title}</h1>
+                  <h1 className="text-2xl font-extrabold tracking-tight md:text-3xl">{title}</h1>
                 ) : null}
                 {subtitle ? (
-                  <p className="mt-2 max-w-[76ch] text-sm text-[var(--app-muted)] md:text-base">{subtitle}</p>
+                  <p className="mt-2 max-w-[76ch] text-sm text-[var(--app-muted)]">{subtitle}</p>
                 ) : null}
               </div>
             ) : null}

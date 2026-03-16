@@ -21,7 +21,6 @@ export default function VaultPage() {
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  // Form fields
   const [name, setName] = useState('');
   const [service, setService] = useState('');
   const [credType, setCredType] = useState('password');
@@ -82,152 +81,178 @@ export default function VaultPage() {
   };
 
   return (
-    <PlatformShell teamId={teamId}>
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
-          <p className="landing-kicker">Security</p>
-          <h1 className="mt-1 text-4xl font-extrabold tracking-tight">Vault</h1>
-          <p className="mt-1 max-w-[60ch] text-[var(--app-muted)]">
-            Store credentials securely. Use each template key in playbooks
-            (e.g. {'{{'}vault_google_admin{'}'}{'}'}) so runs/automations can inject the secret.
-          </p>
-        </div>
+    <PlatformShell 
+      teamId={teamId}
+      title="Vault"
+      subtitle="Store credentials securely. Use template keys in playbooks (e.g. {{vault_key}}) so runs can inject them."
+    >
+      <div className="mb-6 flex justify-end">
         <button
           onClick={() => setShowForm(v => !v)}
-          className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold"
+          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-[var(--app-blue)] focus:ring-offset-2 ${
+            showForm
+              ? 'bg-[var(--app-bg-muted)] text-[var(--app-text)] hover:bg-[var(--app-line-soft)]'
+              : 'btn-primary'
+          }`}
         >
-          <Plus size={15} weight="bold" />
-          Add credential
+          {showForm ? 'Cancel' : (
+            <>
+              <Plus size={16} weight="bold" />
+              Add Credential
+            </>
+          )}
         </button>
       </div>
 
-      {/* Add credential form */}
       {showForm && (
-        <div className="panel max-w-2xl p-6 mb-6 space-y-4">
-          <h2 className="text-lg font-bold">New credential</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--app-muted)]">Name</label>
-              <input
-                className="input"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. Google Admin Service Account"
-              />
+        <div className="mb-8 overflow-hidden relative rounded-2xl border border-[var(--app-line)] bg-[var(--app-bg-muted)] shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="absolute top-0 left-0 h-1 w-full bg-[var(--app-blue)] opacity-20" />
+          <div className="p-6">
+            <h2 className="mb-6 flex items-center gap-2 text-lg font-bold">
+              <span className="text-[var(--app-muted)]"><Lock size={20} /></span>
+              Store New Credential
+            </h2>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">Credential Name</label>
+                  <input
+                    className="input w-full bg-white"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="e.g., Production AWS Key"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">Service</label>
+                  <select
+                    className="input w-full bg-white"
+                    value={service}
+                    onChange={e => setService(e.target.value)}
+                  >
+                    <option value="">Select service…</option>
+                    {SERVICE_PRESETS.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">Credential Type</label>
+                  <select
+                    className="input w-full bg-white"
+                    value={credType}
+                    onChange={e => setCredType(e.target.value)}
+                  >
+                    {CREDENTIAL_TYPES.map(t => (
+                      <option key={t} value={t}>
+                        {t.replace('_', ' ')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">Secret Value</label>
+                  <input
+                    className="input w-full bg-white font-mono text-sm"
+                    type="password"
+                    value={value}
+                    onChange={e => setValue(e.target.value)}
+                    placeholder="••••••••••••••••"
+                  />
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--app-muted)]">Service</label>
-              <select
-                className="input"
-                value={service}
-                onChange={e => setService(e.target.value)}
+            
+            <div className="mt-8 flex justify-end gap-3 border-t border-[var(--app-line-soft)] pt-4">
+              <button
+                onClick={resetForm}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-[var(--app-muted)] transition-colors hover:bg-[rgba(27,42,74,0.05)]"
               >
-                <option value="">Select service…</option>
-                {SERVICE_PRESETS.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--app-muted)]">Type</label>
-              <select
-                className="input"
-                value={credType}
-                onChange={e => setCredType(e.target.value)}
+                Cancel
+              </button>
+              <button
+                onClick={addCredential}
+                disabled={saving}
+                className="btn-primary inline-flex items-center justify-center gap-2 rounded-lg px-6 py-2 text-sm font-bold shadow-sm disabled:opacity-60"
               >
-                {CREDENTIAL_TYPES.map(t => (
-                  <option key={t} value={t}>
-                    {t.replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
+                {saving ? (
+                  <span className="inline-flex animate-spin"><CircleNotch size={16} /></span>
+                ) : (
+                  <Lock size={16} weight="fill" />
+                )}
+                {saving ? 'Encrypting…' : 'Save securely'}
+              </button>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--app-muted)]">Value</label>
-              <input
-                className="input"
-                type="password"
-                value={value}
-                onChange={e => setValue(e.target.value)}
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={resetForm}
-              className="rounded-full border border-[var(--app-line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--app-chip)]"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={addCredential}
-              disabled={saving}
-              className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-60"
-            >
-              {saving ? (
-                <span className="animate-spin inline-flex"><CircleNotch size={14} /></span>
-              ) : (
-                <Lock size={14} weight="fill" />
-              )}
-              {saving ? 'Storing…' : 'Store securely'}
-            </button>
           </div>
         </div>
       )}
 
-      {/* Credentials list */}
       {loading ? (
         <div className="py-20 text-center text-[var(--app-muted)]">
-          <span className="animate-spin inline-flex mb-2"><CircleNotch size={24} /></span>
+          <div className="flex justify-center mb-2 animate-spin">
+            <CircleNotch size={24} />
+          </div>
           <p className="text-sm">Loading vault…</p>
         </div>
       ) : credentials.length === 0 ? (
-        <div className="py-20 text-center text-[var(--app-muted)]">
-          <span className="mx-auto mb-3 inline-flex opacity-30"><Lock size={40} /></span>
-          <p className="font-semibold">Vault is empty</p>
-          <p className="mt-1 text-sm">Add credentials that playbook runs can reference securely.</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--app-line)] bg-[var(--app-bg-muted)] px-6 py-24 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--app-bg)] shadow-sm">
+            <span className="text-[var(--app-muted)] opacity-50"><Lock size={28} /></span>
+          </div>
+          <p className="mb-1 text-lg font-bold text-[var(--app-text)]">Your vault is empty</p>
+          <p className="max-w-sm text-sm text-[var(--app-muted)]">
+            Store sensitive credentials here to safely reference them in your automated playbooks.
+          </p>
+          {!showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="mt-6 rounded-lg border border-[var(--app-line)] bg-white px-4 py-2 text-sm font-bold shadow-sm transition-colors hover:bg-[var(--app-bg-hover)]"
+            >
+              Add your first credential
+            </button>
+          )}
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {credentials.map(cred => (
-            <div key={cred.id} className="panel-tight p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex shrink-0 text-[var(--app-blue)]">
-                    <Lock size={16} weight="fill" />
-                  </span>
-                  <h3 className="font-semibold text-sm">{cred.name}</h3>
+            <div key={cred.id} className="group flex flex-col rounded-2xl border border-[var(--app-line)] bg-white p-5 shadow-sm transition-all hover:border-[var(--app-blue)] hover:shadow-md">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-col">
+                  <h3 className="truncate text-[15px] font-bold">{cred.name}</h3>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    <span className="rounded bg-[var(--app-bg-muted)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--app-muted)]">
+                      {cred.service}
+                    </span>
+                    <span className="rounded bg-[var(--app-bg-muted)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--app-muted)]">
+                      {cred.credential_type.replace('_', ' ')}
+                    </span>
+                  </div>
                 </div>
                 <button
                   onClick={() => deleteCredential(cred.id)}
                   disabled={deleting === cred.id}
-                  className="shrink-0 text-[var(--app-muted)] hover:text-red-500 transition-colors disabled:opacity-40"
+                  className="shrink-0 rounded-full p-1.5 text-[var(--app-muted-soft)] opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 disabled:opacity-40"
+                  title="Remove credential"
                 >
                   {deleting === cred.id ? (
-                    <span className="animate-spin inline-flex"><CircleNotch size={14} /></span>
+                    <span className="inline-flex animate-spin"><CircleNotch size={14} /></span>
                   ) : (
-                    <Trash size={14} />
+                    <Trash size={16} />
                   )}
                 </button>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded-full bg-[var(--app-chip)] px-2 py-0.5 text-[11px] font-bold text-[var(--app-muted)]">
-                  {cred.service}
-                </span>
-                <span className="rounded-full bg-[var(--app-chip)] px-2 py-0.5 text-[11px] font-bold text-[var(--app-muted)] capitalize">
-                  {cred.credential_type.replace('_', ' ')}
-                </span>
+              
+              <div className="mt-auto">
+                <div className="mb-1.5 text-[11px] font-medium text-[var(--app-muted)]">Template Reference</div>
+                <div className="flex items-center gap-2 rounded-lg border border-[rgba(10,21,38,0.06)] bg-[rgba(10,21,38,0.03)] p-2">
+                  <span className="shrink-0 text-[var(--app-muted)]"><Lock size={14} weight="fill" /></span>
+                  <code className="truncate font-mono text-xs font-bold text-[var(--app-brand-sand)]">
+                    {`{{`}{cred.template_key || 'vault_credential'}{`}}`}
+                  </code>
+                </div>
               </div>
-              <p className="mt-2 font-mono text-xs text-[var(--app-muted)]">
-                {cred.masked_value}
-              </p>
-              <p className="mt-1 font-mono text-[11px] text-[var(--app-muted)]">
-                {'{{'}{cred.template_key ?? 'vault_credential'}{'}'}{'}'}
-              </p>
-              <p className="mt-1 text-[10px] text-[var(--app-muted)]">
-                Added {new Date(cred.created_at).toLocaleDateString()}
-              </p>
             </div>
           ))}
         </div>

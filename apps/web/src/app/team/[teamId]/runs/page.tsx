@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Play, CircleNotch, CheckCircle, XCircle, Clock } from '@phosphor-icons/react';
+import { Play, CircleNotch, CheckCircle, XCircle, Clock, ArrowRight } from '@phosphor-icons/react';
 
 import { PlatformShell } from '@/components/platform-shell';
 import { apiGet } from '@/lib/api';
@@ -10,20 +10,20 @@ import type { Run } from '@/lib/types';
 
 const STATUS_MAP: Record<string, { icon: React.ReactNode; cls: string }> = {
   completed: {
-    icon: <CheckCircle size={16} weight="fill" />,
-    cls: 'bg-[rgba(123,155,134,0.18)] text-[#335443]',
+    icon: <CheckCircle size={14} weight="fill" />,
+    cls: 'bg-emerald-50 text-emerald-700',
   },
   running: {
-    icon: <span className="animate-spin inline-flex"><CircleNotch size={16} /></span>,
-    cls: 'bg-[rgba(95,119,132,0.18)] text-[#3f5e6f]',
+    icon: <span className="animate-spin inline-flex"><CircleNotch size={14} /></span>,
+    cls: 'bg-amber-50 text-amber-700',
   },
   failed: {
-    icon: <XCircle size={16} weight="fill" />,
-    cls: 'bg-[rgba(191,100,100,0.18)] text-[#8b3a3a]',
+    icon: <XCircle size={14} weight="fill" />,
+    cls: 'bg-red-50 text-red-700',
   },
   pending: {
-    icon: <Clock size={16} />,
-    cls: 'bg-[var(--app-chip)] text-[var(--app-muted)]',
+    icon: <Clock size={14} />,
+    cls: 'bg-gray-100 text-gray-600',
   },
 };
 
@@ -41,37 +41,38 @@ export default function RunsListPage() {
   }, [teamId]);
 
   return (
-    <PlatformShell teamId={teamId}>
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
-          <p className="landing-kicker">Automation</p>
-          <h1 className="mt-1 text-4xl font-extrabold tracking-tight">Runs</h1>
-          <p className="mt-1 text-[var(--app-muted)]">
-            View all batch runs and their verification logs.
-          </p>
-        </div>
+    <PlatformShell 
+      teamId={teamId}
+      title="Runs"
+      subtitle="View all batch runs and their verification logs."
+    >
+      <div className="mb-4 flex justify-end">
         <button
           onClick={() => router.push(`/team/${teamId}/runs/new`)}
-          className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold"
+          className="btn-primary inline-flex items-center gap-2 px-4 py-1.5 text-sm"
         >
-          <Play size={15} weight="fill" />
+          <Play size={14} weight="fill" />
           New run
         </button>
       </div>
 
       {loading ? (
         <div className="py-20 text-center text-[var(--app-muted)]">
-          <span className="animate-spin inline-flex mb-2"><CircleNotch size={24} /></span>
+          <div className="flex justify-center mb-2 animate-spin">
+            <CircleNotch size={24} />
+          </div>
           <p className="text-sm">Loading runs…</p>
         </div>
       ) : runs.length === 0 ? (
-        <div className="py-20 text-center text-[var(--app-muted)]">
-          <span className="mx-auto mb-3 inline-flex opacity-30"><Play size={40} /></span>
-          <p className="font-semibold">No runs yet</p>
+        <div className="rounded-xl border border-dashed border-[var(--app-line-soft)] py-20 text-center text-[var(--app-muted)]">
+          <div className="flex justify-center mb-3 opacity-20">
+            <Play size={32} />
+          </div>
+          <p className="font-semibold text-[var(--app-text)]">No runs yet</p>
           <p className="mt-1 text-sm">Start a batch run from a compiled playbook.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="rounded-xl border border-[var(--app-line-soft)] bg-white overflow-hidden divide-y divide-[var(--app-line-soft)]">
           {runs.map(run => {
             const s = STATUS_MAP[run.status] ?? STATUS_MAP.pending;
             const successRate =
@@ -83,34 +84,35 @@ export default function RunsListPage() {
               <button
                 key={run.id}
                 onClick={() => router.push(`/team/${teamId}/runs/${run.id}`)}
-                className="panel-tight flex w-full items-center gap-4 p-4 text-left transition-shadow hover:shadow-md"
+                className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-[rgba(27,42,74,0.01)]"
               >
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold capitalize ${s.cls}`}>
+                <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${s.cls}`}>
                   {s.icon}
                   {run.status}
                 </span>
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-sm truncate">
-                    Run #{run.id.slice(0, 8)} — {run.input_source || 'manual'}
-                  </h3>
-                  <p className="text-xs text-[var(--app-muted)] mt-0.5">
+                  <p className="font-bold text-sm truncate">
+                    {run.input_source || `Run #${run.id.slice(0, 8)}`}
+                  </p>
+                  <p className="text-xs text-[var(--app-muted)]">
                     {run.total_items} items · {run.trigger_type}
                   </p>
                 </div>
 
-                {run.status === 'completed' && (
-                  <div className="text-right shrink-0">
-                    <p className="font-bold text-sm">{successRate}%</p>
-                    <p className="text-xs text-[var(--app-muted)]">
-                      {run.success_count}/{run.total_items} passed
-                    </p>
-                  </div>
-                )}
+                <div className="text-right shrink-0">
+                  <p className="font-bold text-sm">{successRate}%</p>
+                  <p className="text-[10px] text-[var(--app-muted)] uppercase font-semibold">
+                    {run.success_count}/{run.total_items} passed
+                  </p>
+                </div>
 
-                <span className="text-xs text-[var(--app-muted)] shrink-0">
-                  {new Date(run.started_at).toLocaleDateString()}
-                </span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-[10px] font-bold text-[var(--app-muted)] uppercase">
+                    {new Date(run.started_at).toLocaleDateString()}
+                  </span>
+                  <span className="text-[var(--app-line-strong)]"><ArrowRight size={14} /></span>
+                </div>
               </button>
             );
           })}
