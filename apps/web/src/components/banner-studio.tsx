@@ -2,47 +2,24 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowSquareOut, CopySimple, FileSvg, ImageSquare, Sparkle } from '@phosphor-icons/react';
+import { ArrowSquareOut, CopySimple, FileSvg, FilmStrip, ImageSquare, Sparkle } from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
 
-import { getGeminiWordmarkSvg } from '@/components/gemini-logo';
-
-const BANNER_WIDTH = 1600;
-const BANNER_HEIGHT = 900;
-const VAG_ROUNDED_FONT_SOURCES = [
-  { path: '/fonts/vag-rounded/VAG Rounded Light (1)_0.ttf', weight: 400 },
-  { path: '/fonts/vag-rounded/VAG Rounded Bold_0.ttf', weight: 700 },
-  { path: '/fonts/vag-rounded/VAG Rounded Black_0.ttf', weight: 900 },
-] as const;
+import {
+  BANNER_GIF_EXPORT_HEIGHT,
+  BANNER_GIF_EXPORT_WIDTH,
+  BANNER_GIF_OUTPUT_PATH,
+  BANNER_HEIGHT,
+  BANNER_LOOP_FRAME_COUNT,
+  BANNER_LOOP_INTERVAL_MS,
+  BANNER_WIDTH,
+  DEFAULT_BOTTOM_LINE_OFFSET_X,
+  PUBLIC_FONT_CSS,
+  VAG_ROUNDED_FONT_SOURCES,
+  createBannerSvg,
+} from '@/lib/banner-art';
 
 let embeddedFontCssPromise: Promise<string> | null = null;
-
-const PUBLIC_FONT_CSS = `
-  @font-face {
-    font-family: 'VAG Rounded';
-    src: url('/fonts/vag-rounded/VAG Rounded Light (1)_0.ttf') format('truetype');
-    font-style: normal;
-    font-weight: 400;
-  }
-
-  @font-face {
-    font-family: 'VAG Rounded';
-    src: url('/fonts/vag-rounded/VAG Rounded Bold_0.ttf') format('truetype');
-    font-style: normal;
-    font-weight: 700;
-  }
-
-  @font-face {
-    font-family: 'VAG Rounded';
-    src: url('/fonts/vag-rounded/VAG Rounded Black_0.ttf') format('truetype');
-    font-style: normal;
-    font-weight: 900;
-  }
-`;
-
-type BannerOptions = {
-  bottomLineOffsetX: number;
-};
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
@@ -79,179 +56,6 @@ async function getEmbeddedFontCss() {
   }
 
   return embeddedFontCssPromise;
-}
-
-function createBannerSvg(fontCss: string, options: BannerOptions) {
-  const font = "'VAG Rounded', sans-serif";
-  // Brand colors (original, for mark only)
-  const brandBlue = '#0f678f';
-  const brandTeal = '#0f8f7e';
-  const brandSand = '#d18434';
-  const dark = '#1e3044';
-  const muted = '#6b8295';
-  const geminiLogo = getGeminiWordmarkSvg({ height: 46, color: 'white' });
-  const { bottomLineOffsetX } = options;
-
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${BANNER_WIDTH} ${BANNER_HEIGHT}" width="${BANNER_WIDTH}" height="${BANNER_HEIGHT}" role="img" aria-labelledby="memoo-banner-title">
-      <title id="memoo-banner-title">memoo — Record once, run anywhere.</title>
-      <defs>
-        <clipPath id="clip"><rect width="${BANNER_WIDTH}" height="${BANNER_HEIGHT}" /></clipPath>
-      </defs>
-      <style>
-        ${fontCss}
-      </style>
-
-      <g clip-path="url(#clip)">
-
-        <!-- ─── BACKGROUND — flat warm off-white ─── -->
-        <rect width="1600" height="900" fill="#f0ece8" />
-
-        <!-- ─── Scattered product elements ─── -->
-
-        <!-- Top-left: mini browser window -->
-        <g transform="translate(80, 100) rotate(-6)" opacity="0.32">
-          <rect width="160" height="110" rx="12" fill="none" stroke="${dark}" stroke-width="2" />
-          <line x1="0" y1="24" x2="160" y2="24" stroke="${dark}" stroke-width="1.2" />
-          <circle cx="14" cy="12" r="3.5" fill="${dark}" />
-          <circle cx="26" cy="12" r="3.5" fill="${dark}" />
-          <circle cx="38" cy="12" r="3.5" fill="${dark}" />
-          <rect x="18" y="42" width="90" height="6" rx="3" fill="${dark}" />
-          <rect x="18" y="56" width="60" height="6" rx="3" fill="${dark}" />
-          <rect x="18" y="70" width="110" height="6" rx="3" fill="${dark}" />
-        </g>
-
-        <!-- Top-left: cursor clicking -->
-        <g transform="translate(310, 170) rotate(8)" opacity="0.38">
-          <path d="M 0 0 L 0 26 L 8 19 L 13 32 L 18 30 L 13 17 L 21 17 Z" fill="${dark}" />
-        </g>
-
-        <!-- Top-right: REC indicator -->
-        <g transform="translate(1360, 110)" opacity="0.45">
-          <circle cx="10" cy="10" r="10" fill="#d4726b" />
-          <circle cx="10" cy="10" r="16" fill="none" stroke="#d4726b" stroke-width="1.5" />
-        </g>
-
-        <!-- Top-right: mini playbook card -->
-        <g transform="translate(1320, 180) rotate(4)" opacity="0.28">
-          <rect width="140" height="100" rx="10" fill="none" stroke="${dark}" stroke-width="2" />
-          <rect x="14" y="14" width="50" height="8" rx="4" fill="${dark}" />
-          <circle cx="22" cy="40" r="5" fill="${dark}" />
-          <rect x="34" y="37" width="70" height="6" rx="3" fill="${dark}" />
-          <circle cx="22" cy="58" r="5" fill="${dark}" />
-          <rect x="34" y="55" width="55" height="6" rx="3" fill="${dark}" />
-          <circle cx="22" cy="76" r="5" fill="none" stroke="${dark}" stroke-width="1.5" />
-          <rect x="34" y="73" width="40" height="6" rx="3" fill="${dark}" />
-        </g>
-
-        <!-- Bottom-left: play button -->
-        <g transform="translate(120, 560) rotate(10)" opacity="0.30">
-          <circle cx="24" cy="24" r="24" fill="none" stroke="${dark}" stroke-width="2" />
-          <polygon points="18,12 18,36 38,24" fill="${dark}" />
-        </g>
-
-        <!-- Bottom-left: small checklist -->
-        <g transform="translate(240, 620) rotate(-4)" opacity="0.25">
-          <rect x="0" y="0" width="10" height="10" rx="2.5" fill="none" stroke="${dark}" stroke-width="1.8" />
-          <path d="M 2 5 L 4.5 7.5 L 8 3" stroke="${dark}" stroke-width="1.5" fill="none" />
-          <rect x="16" y="2" width="50" height="6" rx="3" fill="${dark}" />
-          <rect x="0" y="18" width="10" height="10" rx="2.5" fill="none" stroke="${dark}" stroke-width="1.8" />
-          <path d="M 2 23 L 4.5 25.5 L 8 21" stroke="${dark}" stroke-width="1.5" fill="none" />
-          <rect x="16" y="20" width="40" height="6" rx="3" fill="${dark}" />
-          <rect x="0" y="36" width="10" height="10" rx="2.5" fill="none" stroke="${dark}" stroke-width="1.8" />
-          <rect x="16" y="38" width="34" height="6" rx="3" fill="${dark}" />
-        </g>
-
-        <!-- Bottom-right: cursor with sparkle -->
-        <g transform="translate(1350, 580) rotate(-8)" opacity="0.35">
-          <path d="M 0 0 L 0 28 L 8 21 L 14 34 L 19 31 L 13 18 L 22 18 Z" fill="${dark}" />
-          <g transform="translate(26, -8)">
-            <line x1="6" y1="0" x2="6" y2="12" stroke="${dark}" stroke-width="1.5" />
-            <line x1="0" y1="6" x2="12" y2="6" stroke="${dark}" stroke-width="1.5" />
-          </g>
-        </g>
-
-        <!-- Bottom-right: mini window -->
-        <g transform="translate(1380, 460) rotate(6)" opacity="0.25">
-          <rect width="120" height="80" rx="10" fill="none" stroke="${dark}" stroke-width="2" />
-          <line x1="0" y1="20" x2="120" y2="20" stroke="${dark}" stroke-width="1.2" />
-          <circle cx="12" cy="10" r="3" fill="${dark}" />
-          <circle cx="22" cy="10" r="3" fill="${dark}" />
-          <rect x="14" y="34" width="48" height="16" rx="5" fill="${dark}" />
-        </g>
-
-        <!-- ─── BRAND MARK ─── -->
-        <circle cx="770" cy="168" r="26" fill="${brandBlue}" />
-        <circle cx="830" cy="168" r="26" fill="${brandTeal}" />
-        <rect x="744" y="208" width="112" height="40" rx="20" fill="${brandSand}" />
-
-        <!-- ─── LOGOTYPE ─── -->
-        <text
-          x="800" y="460"
-          text-anchor="middle"
-          font-family="${font}"
-          font-weight="900"
-          font-size="240"
-          fill="${dark}"
-          letter-spacing="-8"
-        >memoo</text>
-
-        <!-- ─── TAGLINE ─── -->
-        <text
-          x="800" y="532"
-          text-anchor="middle"
-          font-family="${font}"
-          font-weight="500"
-          font-size="66"
-          fill="${muted}"
-          letter-spacing="0.5"
-        >Record once, run anywhere.</text>
-
-        <!-- ─── SECONDARY LINE ─── -->
-        <text
-          x="800" y="600"
-          text-anchor="middle"
-          font-family="${font}"
-          font-weight="600"
-          font-size="60"
-          fill="${dark}"
-          letter-spacing="0"
-          opacity="0.50"
-        >Automate <tspan font-weight="800" font-style="italic" opacity="1" fill="${dark}">ANY</tspan> workflow.</text>
-        <!-- Hand-drawn pencil underline under "ANY" -->
-        <path d="M 738 622 C 755 630, 776 624, 797 621 C 818 618, 840 627, 862 621 C 871 619, 880 625, 890 621" fill="none" stroke="${brandSand}" stroke-width="3.2" stroke-linecap="round" opacity="0.65" />
-
-        <!-- ─── BOTTOM BAR — solid sand ─── -->
-        <rect x="0" y="770" width="1600" height="130" fill="${brandSand}" />
-
-        <g transform="translate(${bottomLineOffsetX}, 803)">
-          <text
-            x="91" y="42"
-            text-anchor="middle"
-            font-family="${font}"
-            font-weight="800"
-            font-size="50"
-            fill="white"
-            letter-spacing="-0.5"
-          >Built for</text>
-
-          <g transform="translate(182, 4)">
-            ${geminiLogo}
-          </g>
-
-          <text
-            x="348" y="46"
-            font-family="${font}"
-            font-weight="800"
-            font-size="50"
-            fill="white"
-            letter-spacing="-0.5"
-          >Live Agent Challenge</text>
-        </g>
-
-      </g>
-    </svg>
-  `;
 }
 
 function downloadBlob(filename: string, blob: Blob) {
@@ -305,11 +109,27 @@ async function svgToPng(svgMarkup: string) {
 }
 
 export function BannerStudio() {
-  const [bottomLineOffsetX, setBottomLineOffsetX] = useState(446);
+  const [bottomLineOffsetX, setBottomLineOffsetX] = useState(DEFAULT_BOTTOM_LINE_OFFSET_X);
   const [status, setStatus] = useState<string>('Preparando export...');
   const [exportSvgMarkup, setExportSvgMarkup] = useState<string>('');
   const [isPreparing, setIsPreparing] = useState(true);
-  const previewSvgMarkup = useMemo(() => createBannerSvg(PUBLIC_FONT_CSS, { bottomLineOffsetX }), [bottomLineOffsetX]);
+  const [isExportingGif, setIsExportingGif] = useState(false);
+  const [previewFrame, setPreviewFrame] = useState(0);
+
+  const previewSvgMarkup = useMemo(
+    () => createBannerSvg(PUBLIC_FONT_CSS, { bottomLineOffsetX, phase: previewFrame / BANNER_LOOP_FRAME_COUNT }),
+    [bottomLineOffsetX, previewFrame]
+  );
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setPreviewFrame(currentFrame => (currentFrame + 1) % BANNER_LOOP_FRAME_COUNT);
+    }, BANNER_LOOP_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -321,7 +141,7 @@ export function BannerStudio() {
       }
 
       try {
-        const nextSvgMarkup = createBannerSvg(await getEmbeddedFontCss(), { bottomLineOffsetX });
+        const nextSvgMarkup = createBannerSvg(await getEmbeddedFontCss(), { bottomLineOffsetX, phase: 0 });
         if (cancelled) {
           return;
         }
@@ -388,26 +208,52 @@ export function BannerStudio() {
     }
   }
 
-  return (
-    <main className="min-h-screen text-[#102131] selection:bg-[#0f678f]/20 selection:text-[#102131] px-4 py-8 md:px-8 relative overflow-hidden flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #e8eff6 0%, #e2ebf3 100%)' }}>
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(1100px 620px at -8% -14%, rgba(15, 143, 126, 0.2), transparent 72%), radial-gradient(980px 560px at 108% -8%, rgba(15, 103, 143, 0.26), transparent 74%), radial-gradient(920px 520px at 58% 112%, rgba(209, 132, 52, 0.19), transparent 74%)',
-        }}
-      />
+  async function handleExportGif() {
+    try {
+      setIsExportingGif(true);
+      setStatus('Renderizando GIF con fuentes embebidas...');
 
-      <div className="mx-auto w-full max-w-[1500px] grid gap-8 lg:grid-cols-[420px_1fr] relative z-10">
+      const response = await fetch(`/api/banner/gif?bottomLineOffsetX=${bottomLineOffsetX}`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        let detail = 'No se pudo exportar el GIF.';
+
+        try {
+          const payload = await response.json();
+          if (payload?.detail) {
+            detail = String(payload.detail);
+          }
+        } catch {
+          // Keep fallback message if the response body is not JSON.
+        }
+
+        throw new Error(detail);
+      }
+
+      const gifBlob = await response.blob();
+      downloadBlob('memoo-banner.gif', gifBlob);
+      setStatus('GIF exportado con fuentes preservadas.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'No se pudo exportar el GIF.');
+    } finally {
+      setIsExportingGif(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen text-[#102131] selection:bg-[#0f678f]/20 selection:text-[#102131] px-4 py-8 md:px-8 relative overflow-hidden flex items-center justify-center bg-white">
+      <div className="mx-auto w-full max-w-[1820px] grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] relative z-10">
         <motion.section
           initial={{ opacity: 0, x: -32 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="flex flex-col gap-8 p-6 md:p-10 rounded-[30px] shadow-[0_14px_32px_rgba(15,33,52,0.1)] relative overflow-hidden"
+          className="flex flex-col gap-8 p-6 md:p-10 rounded-[30px] relative overflow-hidden"
           style={{
             border: '1px solid rgba(149, 169, 186, 0.74)',
             background: 'linear-gradient(160deg, rgba(247, 251, 255, 0.9), rgba(233, 242, 249, 0.84))',
-            boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 14px 32px rgba(15, 33, 52, 0.1)',
           }}
         >
           <div className="space-y-4 relative z-10">
@@ -417,18 +263,19 @@ export function BannerStudio() {
             </div>
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-[#102131] leading-[1.1]">Brand Banner</h1>
             <p className="text-base text-[#4d6374] leading-relaxed font-medium">
-              Diseño premium sincronizado con la landing page. Temática clara, glassmorphism sutil, azules profundos, tono salvia y arena.
+              Diseño premium sincronizado con la landing page. Ahora con preview juguetona y un loop GIF ya preparado para usar.
             </p>
           </div>
 
           <div className="grid gap-4 mt-2 relative z-10">
-            <div className="rounded-[20px] p-5 shadow-inner backdrop-blur-sm" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(149, 169, 186, 0.4)' }}>
+            <div className="rounded-[20px] p-5 backdrop-blur-sm" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(149, 169, 186, 0.4)' }}>
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: '#4d6374' }}>Export Resolution</p>
               <p className="text-2xl font-bold tracking-tight text-[#102131]">3200 × 1800 <sup className="text-sm font-medium text-[#4d6374]">@2x</sup></p>
+              <p className="mt-2 text-sm font-semibold text-[#4d6374]">GIF listo: {BANNER_GIF_EXPORT_WIDTH} × {BANNER_GIF_EXPORT_HEIGHT} loop</p>
             </div>
 
             <label
-              className="rounded-[20px] p-5 shadow-inner backdrop-blur-sm grid gap-3"
+              className="rounded-[20px] p-5 backdrop-blur-sm grid gap-3"
               style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(149, 169, 186, 0.4)' }}
             >
               <div className="flex items-center justify-between gap-4">
@@ -459,10 +306,21 @@ export function BannerStudio() {
               onClick={handleExportPng}
               disabled={isPreparing || !exportSvgMarkup}
               className="group relative flex items-center justify-center gap-3 rounded-full px-6 py-4 font-bold transition-all hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
-              style={{ background: '#0f678f', color: '#f0f8ff', boxShadow: '0 8px 16px rgba(15, 103, 143, 0.2)' }}
+              style={{ background: '#0f678f', color: '#f0f8ff' }}
             >
               <ImageSquare size={22} weight="fill" color="white" />
               <span className="relative z-10">Generar PNG (High-Res)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportGif}
+              disabled={isExportingGif}
+              className="flex items-center justify-center gap-3 rounded-full border px-6 py-4 font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: '#d18434', borderColor: '#d18434', color: '#fffaf4' }}
+            >
+              <FilmStrip size={22} weight="fill" color="white" />
+              {isExportingGif ? 'Generando GIF...' : 'Exportar GIF'}
             </button>
 
             <button
@@ -512,16 +370,26 @@ export function BannerStudio() {
           initial={{ opacity: 0, scale: 0.95, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="relative flex items-center justify-center p-2 md:p-6 lg:p-12 w-full h-full min-h-[500px]"
+          className="relative flex items-center justify-center p-0 md:p-2 lg:p-4 w-full h-full min-h-[560px]"
         >
-          <div className="absolute inset-10 rounded-[64px] blur-[80px] opacity-40 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(15,39,60,0.15) 0%, transparent 70%)' }} />
-
-          <div className="relative w-full max-w-[1000px] aspect-video z-10">
+          <div className="relative w-full max-w-[1440px] aspect-video z-10">
             <div
-              style={{ borderColor: 'rgba(255,255,255,0.8)' }}
-              className="w-full h-full rounded-[24px] md:rounded-[32px] overflow-hidden shadow-[0_24px_50px_-12px_rgba(15,39,60,0.3)] border relative group"
+              style={{ borderColor: '#ffffff', background: '#ffffff' }}
+              className="w-full h-full rounded-[24px] md:rounded-[32px] overflow-hidden border relative group"
             >
-              <div className="w-full h-full [&_svg]:w-full [&_svg]:h-full object-cover" dangerouslySetInnerHTML={{ __html: previewSvgMarkup }} />
+              <motion.div
+                animate={{ rotate: [0, -0.2, 0.28, -0.12, 0], y: [0, -2, 0.5, -3, 0], scale: [1, 1.003, 0.999, 1.002, 1] }}
+                transition={{ duration: 3.6, ease: 'easeInOut', repeat: Infinity }}
+                className="w-full h-full origin-center"
+              >
+                <div className="w-full h-full [&_svg]:w-full [&_svg]:h-full object-cover" dangerouslySetInnerHTML={{ __html: previewSvgMarkup }} />
+              </motion.div>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <code className="rounded-full px-4 py-2 text-xs font-semibold" style={{ background: 'rgba(255,255,255,0.58)', color: '#4d6374', border: '1px solid rgba(149, 169, 186, 0.38)' }}>
+                GIF: {BANNER_GIF_OUTPUT_PATH}
+              </code>
             </div>
           </div>
         </motion.section>

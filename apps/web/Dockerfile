@@ -8,6 +8,7 @@ COPY package.json package-lock.json* ./
 COPY entrypoint.sh /entrypoint.sh
 
 RUN npm install
+RUN apk add --no-cache ffmpeg
 RUN chmod +x /entrypoint.sh
 
 # node_modules stays inside the image (anonymous volume in compose

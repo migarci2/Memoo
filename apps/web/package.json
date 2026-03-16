@@ -6,7 +6,8 @@
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "banner:gif": "node scripts/generate-banner-gif.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.44.0",
