@@ -79,7 +79,7 @@ from app.services.run_engine import create_run_record, enqueue_run_execution, va
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-ALLOWED_STEP_TYPES = {'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'action'}
+ALLOWED_STEP_TYPES = {'navigate', 'click', 'input', 'submit', 'verify', 'wait', 'scroll', 'action'}
 ALLOWED_CAPTURE_EVENT_KINDS = ALLOWED_STEP_TYPES
 NON_ACTION_EVENT_KINDS = {'voice_note', 'gemini_clarification'}
 SUPPORTED_CAPTURE_EVENT_KINDS = ALLOWED_CAPTURE_EVENT_KINDS | NON_ACTION_EVENT_KINDS

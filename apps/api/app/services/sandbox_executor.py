@@ -33,6 +33,70 @@ def _substitute(template: str | None, variables: dict[str, str]) -> str | None:
     return _VAR_RE.sub(lambda m: variables.get(m.group(1), m.group(0)), template)
 
 
+def _normalize_target_url(target_url: str | None) -> str | None:
+    if not target_url:
+        return None
+    normalized = target_url.strip()
+    if not normalized:
+        return None
+    if normalized.startswith(('http://', 'https://', 'about:')):
+        return normalized
+    return f'https://{normalized}'
+
+
+def _looks_playwright_selector(selector: str | None) -> bool:
+    if not selector:
+        return False
+    candidate = selector.strip()
+    if not candidate:
+        return False
+
+    lower = candidate.lower()
+    if lower.startswith(('xpath=', 'css=', 'text=', 'role=', '//', '/', '#', '.', '[')):
+        return True
+    if any(token in candidate for token in ('#', '.', '[', ']', '>', ':', '=')):
+        return True
+    if ' ' in candidate:
+        return False
+    return bool(re.fullmatch(r'[a-z][a-z0-9_-]*', lower))
+
+
+def _scroll_config(step: dict[str, Any]) -> tuple[str, float]:
+    variables = step.get('variables') or {}
+    direction = str(variables.get('direction') or 'down').strip().lower()
+    if direction not in {'down', 'up', 'top', 'bottom'}:
+        direction = 'down'
+
+    raw_amount = variables.get('amount')
+    try:
+        amount = float(raw_amount) if raw_amount not in (None, '') else 720.0
+    except (TypeError, ValueError):
+        amount = 720.0
+    if amount <= 0:
+        amount = 720.0
+    return direction, amount
+
+
+async def _scroll_page(page: Any, *, direction: str, amount: float) -> None:
+    await page.evaluate(
+        """({ direction, amount }) => {
+            if (direction === 'top') {
+                window.scrollTo({ top: 0, behavior: 'auto' });
+                return;
+            }
+            if (direction === 'bottom') {
+                const root = document.scrollingElement || document.documentElement || document.body;
+                window.scrollTo({ top: root.scrollHeight, behavior: 'auto' });
+                return;
+            }
+            const delta = direction === 'up' ? -amount : amount;
+            window.scrollBy({ top: delta, behavior: 'auto' });
+        }""",
+        {'direction': direction, 'amount': amount},
+    )
+    await asyncio.sleep(0.35)
+
+
 async def _get_ws_endpoint(cdp_base: str) -> str:
     """Query Chromium's /json/version to get the DevTools WebSocket URL."""
     async with httpx.AsyncClient() as client:
@@ -101,7 +165,7 @@ def _build_autonomous_task(
     if target_url:
         parts.append(f'Start from this page when relevant: {target_url}')
     if selector:
-        parts.append(f'CSS selector hint from the playbook: {selector}')
+        parts.append(f'Selector hint from the playbook: {selector}')
 
     guardrails = step.get('guardrails') or {}
     expected_text = guardrails.get('expected_text')
@@ -186,7 +250,7 @@ async def _verify_autonomous_outcome(
     expected_text: str | None,
     timeout_ms: int,
 ) -> None:
-    if selector:
+    if selector and _looks_playwright_selector(selector):
         await page.wait_for_selector(selector, timeout=timeout_ms)
     if expected_text:
         await page.wait_for_function(
@@ -269,7 +333,7 @@ async def execute_in_sandbox(
                 seq = step.get('sequence', 0)
                 title = step.get('title', f'Step {seq}')
                 step_type = step.get('step_type', 'action')
-                target_url = _substitute(step.get('target_url'), row_data)
+                target_url = _normalize_target_url(_substitute(step.get('target_url'), row_data))
                 selector = _substitute(step.get('selector'), row_data)
                 variables = step.get('variables', {})
 
@@ -303,18 +367,21 @@ async def execute_in_sandbox(
 
                     try:
                         if step_type == 'navigate':
-                            if target_url:
-                                if not target_url.startswith(('http://', 'https://', 'about:')):
-                                    target_url = f'https://{target_url}'
-                                await page.goto(target_url, wait_until='domcontentloaded')
+                            if not target_url:
+                                raise RuntimeError('Navigate step is missing a target URL.')
+                            await page.goto(target_url, wait_until='domcontentloaded')
                             actual = f'Navigated to {page.url}'
 
                         elif step_type == 'click':
+                            if selector and not _looks_playwright_selector(selector):
+                                raise NotImplementedError('Selector requires agent resolution.')
                             if selector:
                                 await page.click(selector)
                             actual = f'Clicked {selector or "element"}'
 
                         elif step_type == 'input':
+                            if selector and not _looks_playwright_selector(selector):
+                                raise NotImplementedError('Selector requires agent resolution.')
                             if selector and resolved_values:
                                 value = next(iter(resolved_values.values()), '')
                                 await page.fill(selector, value)
@@ -323,6 +390,8 @@ async def execute_in_sandbox(
                                 actual = 'Input step skipped (no selector or value)'
 
                         elif step_type == 'submit':
+                            if selector and not _looks_playwright_selector(selector):
+                                raise NotImplementedError('Selector requires agent resolution.')
                             if selector:
                                 await page.click(selector)
                             else:
@@ -331,9 +400,19 @@ async def execute_in_sandbox(
                             actual = 'Form submitted'
 
                         elif step_type == 'verify':
-                            if selector:
+                            if selector and _looks_playwright_selector(selector):
                                 await page.wait_for_selector(selector, timeout=timeout_ms)
                                 actual = f'Verified {selector} is present'
+                            elif step.get('guardrails', {}).get('expected_text'):
+                                expected_text = str(step.get('guardrails', {}).get('expected_text'))
+                                await page.wait_for_function(
+                                    '(text) => document.body && document.body.innerText.includes(text)',
+                                    arg=expected_text,
+                                    timeout=timeout_ms,
+                                )
+                                actual = f'Verified text "{expected_text}" is present'
+                            elif selector:
+                                raise NotImplementedError('Selector requires agent resolution.')
                             else:
                                 actual = expected or 'Verification passed'
 
@@ -341,6 +420,22 @@ async def execute_in_sandbox(
                             wait_secs = float(step.get('variables', {}).get('seconds', 2))
                             await asyncio.sleep(wait_secs)
                             actual = f'Waited {wait_secs}s'
+
+                        elif step_type == 'scroll':
+                            if selector:
+                                if not _looks_playwright_selector(selector):
+                                    raise NotImplementedError('Selector requires agent resolution.')
+                                await page.locator(selector).scroll_into_view_if_needed()
+                                await asyncio.sleep(0.25)
+                                actual = f'Scrolled to {selector}'
+                            else:
+                                direction, amount = _scroll_config(step)
+                                await _scroll_page(page, direction=direction, amount=amount)
+                                actual = (
+                                    f'Scrolled to {direction}'
+                                    if direction in {'top', 'bottom'}
+                                    else f'Scrolled {direction} by {int(amount)}px'
+                                )
 
                         elif _should_use_stagehand(step_type):
                             used_agent = True
@@ -381,9 +476,8 @@ async def execute_in_sandbox(
                                 pass
 
                         if autonomous_target_url and _should_use_stagehand(step_type):
-                            if not autonomous_target_url.startswith(('http://', 'https://', 'about:')):
-                                autonomous_target_url = f'https://{autonomous_target_url}'
-                            if page.url != autonomous_target_url:
+                            autonomous_target_url = _normalize_target_url(autonomous_target_url)
+                            if autonomous_target_url and page.url != autonomous_target_url:
                                 await page.goto(autonomous_target_url, wait_until='domcontentloaded')
 
                         task = _build_autonomous_task(

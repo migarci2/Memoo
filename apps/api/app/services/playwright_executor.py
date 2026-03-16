@@ -27,6 +27,10 @@ from app.services.sandbox_executor import (
     _should_use_stagehand,
     _agent_start_url,
     _build_autonomous_task,
+    _looks_playwright_selector,
+    _normalize_target_url,
+    _scroll_config,
+    _scroll_page,
     _run_stagehand_step,
     _verify_autonomous_outcome,
     _format_stagehand_summary,
@@ -101,7 +105,7 @@ async def execute_playbook_steps(
                 seq = step.get('sequence', 0)
                 title = step.get('title', f'Step {seq}')
                 step_type = step.get('step_type', 'action')
-                target_url = _substitute(step.get('target_url'), row_data)
+                target_url = _normalize_target_url(_substitute(step.get('target_url'), row_data))
                 selector = _substitute(step.get('selector'), row_data)
                 variables = step.get('variables', {})
 
@@ -134,18 +138,21 @@ async def execute_playbook_steps(
 
                     try:
                         if step_type == 'navigate':
-                            if target_url:
-                                if not target_url.startswith(('http://', 'https://', 'about:')):
-                                    target_url = f'https://{target_url}'
-                                await page.goto(target_url, wait_until='domcontentloaded')
+                            if not target_url:
+                                raise RuntimeError('Navigate step is missing a target URL.')
+                            await page.goto(target_url, wait_until='domcontentloaded')
                             actual = f'Navigated to {page.url}'
 
                         elif step_type == 'click':
+                            if selector and not _looks_playwright_selector(selector):
+                                raise NotImplementedError('Selector requires agent resolution.')
                             if selector:
                                 await page.click(selector)
                             actual = f'Clicked {selector or "element"}'
 
                         elif step_type == 'input':
+                            if selector and not _looks_playwright_selector(selector):
+                                raise NotImplementedError('Selector requires agent resolution.')
                             if selector and resolved_values:
                                 value = next(iter(resolved_values.values()), '')
                                 await page.fill(selector, value)
@@ -154,6 +161,8 @@ async def execute_playbook_steps(
                                 actual = 'Input step skipped (no selector or value)'
 
                         elif step_type == 'submit':
+                            if selector and not _looks_playwright_selector(selector):
+                                raise NotImplementedError('Selector requires agent resolution.')
                             if selector:
                                 await page.click(selector)
                             else:
@@ -163,9 +172,19 @@ async def execute_playbook_steps(
                             actual = 'Form submitted'
 
                         elif step_type == 'verify':
-                            if selector:
+                            if selector and _looks_playwright_selector(selector):
                                 await page.wait_for_selector(selector, timeout=timeout_ms)
                                 actual = f'Verified {selector} is present'
+                            elif step.get('guardrails', {}).get('expected_text'):
+                                expected_text = str(step.get('guardrails', {}).get('expected_text'))
+                                await page.wait_for_function(
+                                    '(text) => document.body && document.body.innerText.includes(text)',
+                                    arg=expected_text,
+                                    timeout=timeout_ms,
+                                )
+                                actual = f'Verified text "{expected_text}" is present'
+                            elif selector:
+                                raise NotImplementedError('Selector requires agent resolution.')
                             else:
                                 actual = expected or 'Verification passed'
 
@@ -173,6 +192,22 @@ async def execute_playbook_steps(
                             wait_secs = float(step.get('variables', {}).get('seconds', 2))
                             await asyncio.sleep(wait_secs)
                             actual = f'Waited {wait_secs}s'
+
+                        elif step_type == 'scroll':
+                            if selector:
+                                if not _looks_playwright_selector(selector):
+                                    raise NotImplementedError('Selector requires agent resolution.')
+                                await page.locator(selector).scroll_into_view_if_needed()
+                                await asyncio.sleep(0.25)
+                                actual = f'Scrolled to {selector}'
+                            else:
+                                direction, amount = _scroll_config(step)
+                                await _scroll_page(page, direction=direction, amount=amount)
+                                actual = (
+                                    f'Scrolled to {direction}'
+                                    if direction in {'top', 'bottom'}
+                                    else f'Scrolled {direction} by {int(amount)}px'
+                                )
                             
                         elif _should_use_stagehand(step_type):
                             used_agent = True
@@ -212,9 +247,8 @@ async def execute_playbook_steps(
                                 pass
 
                         if autonomous_target_url and _should_use_stagehand(step_type):
-                            if not autonomous_target_url.startswith(('http://', 'https://', 'about:')):
-                                autonomous_target_url = f'https://{autonomous_target_url}'
-                            if page.url != autonomous_target_url:
+                            autonomous_target_url = _normalize_target_url(autonomous_target_url)
+                            if autonomous_target_url and page.url != autonomous_target_url:
                                 await page.goto(autonomous_target_url, wait_until='domcontentloaded')
 
                         task = _build_autonomous_task(

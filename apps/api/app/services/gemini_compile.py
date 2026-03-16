@@ -20,7 +20,7 @@ COMPILE_PROMPT = """You are an expert workflow analyst. Given the following raw 
 recorded during a user session, produce a structured list of semantic playbook steps.
 
 The event stream may include:
-- grounded visual actions from the screen observer (`navigate`, `click`, `input`, `submit`, `verify`, `wait`, `action`)
+- grounded visual actions from the screen observer (`navigate`, `click`, `input`, `submit`, `verify`, `wait`, `scroll`, `action`)
 - `voice_note` entries spoken by the user during Teach Mode
 - `gemini_clarification` entries spoken by the Memoo Navigator voice assistant
 
@@ -30,7 +30,7 @@ and guardrails only when relevant.
 
 For each step, output:
 - title: A clear, human-readable description of the action (e.g. "Fill in employee first name")
-- step_type: One of navigate, click, input, submit, verify, wait, action
+- step_type: One of navigate, click, input, submit, verify, wait, scroll, action
 - target_url: The URL involved, if applicable
 - selector: CSS selector or element identifier, if applicable
 - variables: A dict of variable_name -> template_string for values that should be parameterized
@@ -156,6 +156,8 @@ def _fallback_compile(raw_events: list[dict]) -> list[dict]:
         elif kind == 'submit':
             step['title'] = f'Submit form'
             step['guardrails'] = {'verify': 'Form submitted successfully'}
+        elif kind == 'scroll':
+            step['title'] = _short_title(event.get('text'), 'Scroll the page')
         elif kind == 'verify':
             step['title'] = f'Verify: {event.get("text", "expected state")}'
             step['guardrails'] = {'verify': event.get('text', '')}
